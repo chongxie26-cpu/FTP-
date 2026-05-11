@@ -1,0 +1,1479 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的文件 - FTP 文件管理系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#8B5CF6',
+                        secondary: '#EC4899',
+                        success: '#10B981',
+                        warning: '#F59E0B',
+                        danger: '#EF4444'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .gradient-bg {
+            background: linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%);
+        }
+        .file-item:hover {
+            background: rgba(139, 92, 246, 0.08);
+            transform: translateX(4px);
+        }
+        .folder-icon { color: #F59E0B; }
+        .file-icon { color: #6366F1; }
+        .transition-all { transition: all 0.3s ease; }
+        .drop-zone {
+            border: 2px dashed #D1D5DB;
+            transition: all 0.3s ease;
+        }
+        .drop-zone.active {
+            border-color: #8B5CF6;
+            background: rgba(139, 92, 246, 0.1);
+        }
+        .context-menu {
+            position: absolute;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+            z-index: 1000;
+            min-width: 180px;
+        }
+        .context-menu-item {
+            padding: 10px 16px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .context-menu-item:hover {
+            background: rgba(139, 92, 246, 0.1);
+        }
+        .breadcrumb-item:hover {
+            color: #8B5CF6;
+            cursor: pointer;
+        }
+        .modal-overlay {
+            background: rgba(0, 0, 0, 0.5);
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-purple-50 to-pink-50 min-h-screen">
+    <!-- Login Page -->
+    <div id="loginPage" class="min-h-screen flex items-center justify-center p-4 fade-in">
+        <div class="glass-card rounded-2xl shadow-2xl w-full max-w-md p-8">
+            <!-- 返回门户按钮 -->
+            <div class="mb-4">
+                <a href="/" class="inline-flex items-center text-sm text-gray-600 hover:text-purple-600 transition-all">
+                    <i class="fas fa-arrow-left mr-2"></i>返回统一门户
+                </a>
+            </div>
+            
+            <div class="text-center mb-8">
+                <div class="w-16 h-16 gradient-bg rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-cloud-upload-alt text-white text-3xl"></i>
+                </div>
+                <h1 class="text-2xl font-bold text-gray-800 mb-2">FTP 文件浏览器</h1>
+                <p class="text-gray-600">安全访问您的个人文件空间</p>
+            </div>
+            
+            <form id="loginForm" class="space-y-5">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">用户名</label>
+                    <div class="relative">
+                        <i class="fas fa-user absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                        <input type="text" id="loginUsername" list="savedUsernames" required autocomplete="username"
+                            class="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                            placeholder="请输入用户名" value="">
+                        <datalist id="savedUsernames"></datalist>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">密码</label>
+                    <div class="relative">
+                        <i class="fas fa-lock absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                        <input type="password" id="loginPassword" required autocomplete="current-password"
+                            class="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                            placeholder="请输入密码">
+                    </div>
+                </div>
+
+                <label class="flex items-center space-x-3 cursor-pointer select-none">
+                    <input type="checkbox" id="rememberMe" class="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500">
+                    <span class="text-sm text-gray-700">记住密码，自动登录</span>
+                </label>
+                
+                <button type="submit" id="submitBtn"
+                    class="w-full gradient-bg text-white py-3 rounded-lg font-semibold hover:opacity-90 transition-all shadow-lg">
+                    <i class="fas fa-sign-in-alt mr-2"></i>登录
+                </button>
+            </form>
+            
+            <div id="loginError" class="hidden mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <div class="flex items-center space-x-2">
+                    <i class="fas fa-exclamation-circle text-red-500"></i>
+                    <span id="errorText" class="text-red-700 text-sm"></span>
+                </div>
+            </div>
+            
+            <div class="mt-6 text-center">
+                <p class="text-sm text-gray-500">
+                    <i class="fas fa-shield-alt mr-1"></i>
+                    安全连接 · 数据加密
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- File Explorer Page -->
+    <div id="explorerPage" class="hidden">
+        <!-- Header -->
+        <header class="bg-white shadow-sm sticky top-0 z-40">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-16">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-10 h-10 gradient-bg rounded-lg flex items-center justify-center">
+                            <i class="fas fa-cloud-upload-alt text-white"></i>
+                        </div>
+                        <div>
+                            <h1 class="text-lg font-bold text-gray-800">我的文件</h1>
+                            <p class="text-xs text-gray-500" id="userWelcome">欢迎，用户</p>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center space-x-3">
+                        <button onclick="refreshFiles()" class="p-2 text-gray-600 hover:text-purple-600 transition-all" title="刷新">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                        <button onclick="showUploadModal()" class="gradient-bg text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-all shadow">
+                            <i class="fas fa-upload mr-2"></i>上传
+                        </button>
+                        <button onclick="logout()" class="p-2 text-gray-600 hover:text-red-600 transition-all" title="退出">
+                            <i class="fas fa-sign-out-alt"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <!-- Breadcrumb -->
+            <nav class="mb-6 flex items-center space-x-2 text-sm">
+                <span class="breadcrumb-item text-purple-600 font-medium" onclick="navigateTo('/')">
+                    <i class="fas fa-home mr-1"></i>根目录
+                </span>
+                <div id="breadcrumbContainer" class="flex items-center space-x-2"></div>
+            </nav>
+
+            <!-- Exam Paper Banner (Prominent when paper is distributed) -->
+            <div id="examPaperBanner" class="hidden gradient-bg rounded-2xl p-6 mb-6 text-white shadow-lg">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-16 h-16 bg-white/20 rounded-xl flex items-center justify-center">
+                            <i class="fas fa-file-alt text-3xl"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-bold flex items-center">
+                                <i class="fas fa-graduation-cap mr-2"></i>我的试卷
+                            </h3>
+                            <p id="examPaperName" class="mt-1 text-white/90 text-lg"></p>
+                            <p id="examPaperPath" class="mt-1 text-white/70 text-sm flex items-center">
+                                <i class="fas fa-folder-open mr-1"></i>
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        <button id="accessPaperBtn" onclick="accessExamPaper()" 
+                            class="bg-white text-purple-600 px-6 py-3 rounded-xl font-semibold hover:bg-purple-50 transition-all shadow flex items-center space-x-2">
+                            <i class="fas fa-external-link-alt"></i>
+                            <span>查看试卷</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Exam Info Banner (When no paper distributed yet) -->
+            <div id="examInfoBanner" class="hidden glass-card rounded-xl p-4 mb-6 shadow-sm border-l-4 border-yellow-500">
+                <div class="flex items-start justify-between">
+                    <div class="flex items-start space-x-4">
+                        <div class="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <i class="fas fa-clock text-yellow-600 text-xl"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-semibold text-gray-800 flex items-center">
+                                <i class="fas fa-info-circle mr-2 text-yellow-600"></i>考试信息
+                            </h3>
+                            <div id="examInfoContent" class="mt-2 text-sm text-gray-600 space-y-1"></div>
+                        </div>
+                    </div>
+                    <div id="examPaperStatus" class="flex-shrink-0"></div>
+                </div>
+            </div>
+
+            <!-- Action Bar -->
+            <div class="glass-card rounded-xl p-4 mb-6 shadow-sm">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <button onclick="createNewFolder()" class="flex items-center space-x-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-all">
+                            <i class="fas fa-folder-plus text-yellow-600"></i>
+                            <span>新建文件夹</span>
+                        </button>
+                        <button onclick="toggleViewMode()" class="flex items-center space-x-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-all">
+                            <i id="viewIcon" class="fas fa-th-large"></i>
+                            <span id="viewText">网格视图</span>
+                        </button>
+                    </div>
+                    
+                    <div class="relative flex-1 max-w-md ml-6">
+                        <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                        <input type="text" id="searchInput" placeholder="搜索文件..." 
+                            class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Drop Zone for Upload -->
+            <div id="dropZone" class="drop-zone glass-card rounded-xl p-8 mb-6 text-center">
+                <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-3"></i>
+                <p class="text-gray-600 font-medium">拖拽文件到此处上传</p>
+                <p class="text-sm text-gray-500 mt-1">或点击"上传"按钮选择文件</p>
+            </div>
+
+            <!-- Files Grid/List -->
+            <div id="filesContainer" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                <!-- Parent Directory -->
+                <div id="parentDir" class="hidden file-item glass-card rounded-xl p-4 cursor-pointer transition-all" onclick="goToParent()">
+                    <div class="flex flex-col items-center">
+                        <i class="fas fa-level-up-alt text-3xl text-gray-500 mb-2"></i>
+                        <span class="text-sm text-gray-600 font-medium">返回上级</span>
+                    </div>
+                </div>
+                
+                <!-- Files will be rendered here -->
+            </div>
+
+            <!-- Empty State -->
+            <div id="emptyState" class="hidden glass-card rounded-xl p-12 text-center">
+                <i class="fas fa-folder-open text-6xl text-gray-300 mb-4"></i>
+                <h3 class="text-lg font-semibold text-gray-600 mb-2">此文件夹为空</h3>
+                <p class="text-gray-500 text-sm">上传文件或创建新文件夹开始使用</p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Context Menu -->
+    <div id="contextMenu" class="context-menu hidden">
+        <div class="context-menu-item" onclick="contextAction('download')">
+            <i class="fas fa-download mr-2 text-blue-600"></i>下载
+        </div>
+        <div class="context-menu-item" onclick="contextAction('rename')">
+            <i class="fas fa-edit mr-2 text-green-600"></i>重命名
+        </div>
+        <div class="context-menu-item" onclick="contextAction('delete')">
+            <i class="fas fa-trash mr-2 text-red-600"></i>删除
+        </div>
+        <div class="context-menu-item" onclick="contextAction('share')">
+            <i class="fas fa-share-alt mr-2 text-purple-600"></i>分享
+        </div>
+    </div>
+
+    <!-- Upload Modal -->
+    <div id="uploadModal" class="fixed inset-0 modal-overlay hidden items-center justify-center z-50">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4">
+            <div class="p-6 border-b border-gray-200 flex items-center justify-between">
+                <h3 class="text-xl font-bold text-gray-800">上传文件</h3>
+                <button onclick="closeUploadModal()" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="p-6">
+                <div class="drop-zone rounded-xl p-8 text-center cursor-pointer" id="uploadDropZone">
+                    <i class="fas fa-cloud-upload-alt text-4xl text-purple-400 mb-3"></i>
+                    <p class="text-gray-600 font-medium">点击选择文件或拖拽到此处</p>
+                    <p class="text-sm text-gray-500 mt-2">支持单个文件、多个文件或整个文件夹</p>
+                    <!-- 文件输入 -->
+                    <input type="file" id="fileInput" multiple class="hidden">
+                    <!-- 文件夹输入 -->
+                    <input type="file" id="folderInput" webkitdirectory multiple directory class="hidden">
+                </div>
+                
+                <!-- 上传按钮组 -->
+                <div class="mt-4 flex justify-center space-x-3">
+                    <button onclick="document.getElementById('fileInput').click()" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all text-sm">
+                        <i class="fas fa-file mr-2"></i>选择文件
+                    </button>
+                    <button onclick="document.getElementById('folderInput').click()" class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-all text-sm">
+                        <i class="fas fa-folder mr-2"></i>选择文件夹
+                    </button>
+                </div>
+                
+                <!-- Upload Progress -->
+                <div id="uploadProgress" class="mt-4 hidden">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm text-gray-600" id="uploadFileName">文件名</span>
+                        <span class="text-sm text-gray-600" id="uploadPercent">0%</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div id="uploadProgressBar" class="gradient-bg h-2 rounded-full upload-progress" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="p-6 border-t border-gray-200 flex justify-end">
+                <button onclick="closeUploadModal()" class="px-6 py-2 text-gray-600 hover:text-gray-800 transition-all">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rename Modal -->
+    <div id="renameModal" class="fixed inset-0 modal-overlay hidden items-center justify-center z-50">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-xl font-bold text-gray-800">重命名</h3>
+            </div>
+            <div class="p-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2">新名称</label>
+                <input type="text" id="newNameInput" 
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+            </div>
+            <div class="p-6 border-t border-gray-200 flex justify-end space-x-3">
+                <button onclick="closeRenameModal()" class="px-6 py-2 text-gray-600 hover:text-gray-800 transition-all">取消</button>
+                <button onclick="submitRename()" class="gradient-bg text-white px-6 py-2 rounded-lg transition-all">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Folder Modal -->
+    <div id="createFolderModal" class="fixed inset-0 modal-overlay hidden items-center justify-center z-50">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-xl font-bold text-gray-800">新建文件夹</h3>
+            </div>
+            <div class="p-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2">文件夹名称</label>
+                <input type="text" id="newFolderNameInput" 
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="请输入文件夹名称">
+            </div>
+            <div class="p-6 border-t border-gray-200 flex justify-end space-x-3">
+                <button onclick="closeCreateFolderModal()" class="px-6 py-2 text-gray-600 hover:text-gray-800 transition-all">取消</button>
+                <button onclick="submitCreateFolder()" class="gradient-bg text-white px-6 py-2 rounded-lg transition-all">创建</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Share Modal -->
+    <div id="shareModal" class="fixed inset-0 modal-overlay hidden items-center justify-center z-50">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-xl font-bold text-gray-800">分享文件</h3>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">分享链接</label>
+                    <div class="flex space-x-2">
+                        <input type="text" id="shareLink" readonly
+                            class="flex-1 px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-600">
+                        <button onclick="copyShareLink()" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">访问密码（可选）</label>
+                    <input type="text" id="sharePassword" 
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                        placeholder="留空则无需密码">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">过期时间（天）</label>
+                    <input type="number" id="shareExpireDays" value="7" min="1" max="365"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                </div>
+            </div>
+            <div class="p-6 border-t border-gray-200 flex justify-end space-x-3">
+                <button onclick="closeShareModal()" class="px-6 py-2 text-gray-600 hover:text-gray-800 transition-all">关闭</button>
+                <button onclick="createShare()" class="gradient-bg text-white px-6 py-2 rounded-lg transition-all">生成链接</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed top-4 right-4 transform translate-x-full transition-all duration-300 z-50">
+        <div class="bg-white rounded-lg shadow-lg p-4 flex items-center space-x-3">
+            <i id="toastIcon" class="fas fa-check-circle text-green-500 text-xl"></i>
+            <span id="toastMessage" class="text-gray-800 font-medium">操作成功</span>
+        </div>
+    </div>
+    
+    <!-- Auth Debug Badge -->
+    <div id="authDebugBadge" class="fixed bottom-4 right-4 bg-gray-900 text-white text-xs px-3 py-2 rounded-lg shadow-lg z-50 opacity-90">
+        scope: explorer | user: -
+    </div>
+
+    <script>
+        // 全局状态
+        let currentUser = null;
+        let currentPath = '/';
+        let files = [];
+        let viewMode = 'grid';
+        let contextTarget = null;
+        let authToken = null;
+
+        function updateAuthDebugBadge(username) {
+            const badge = document.getElementById('authDebugBadge');
+            if (!badge) return;
+            badge.textContent = `scope: explorer | user: ${username || '-'}`;
+        }
+
+        // 统一认证 fetch：自动带上 explorer 作用域
+        function explorerFetch(url, options = {}) {
+            return fetch(url, {
+                ...options,
+                headers: {
+                    ...options.headers,
+                    'X-Auth-Scope': 'explorer'
+                }
+            });
+        }
+
+        const CRED_STORAGE_KEY = 'saved_credentials';
+
+        // 加载已保存的账号列表
+        function loadSavedCredentials() {
+            try {
+                return JSON.parse(localStorage.getItem(CRED_STORAGE_KEY) || '[]');
+            } catch {
+                return [];
+            }
+        }
+
+        // 保存登录成功的账号（记住密码时存加密后的密码）
+        function saveCredential(username, password, remember) {
+            const creds = loadSavedCredentials();
+            // 去重后插入到最前
+            const filtered = creds.filter(c => c.username !== username);
+            if (remember && password) {
+                // 密码简单 Base64 混淆（仅防误窥，非真正加密）
+                filtered.unshift({ username, password: btoa(unescape(encodeURIComponent(password))) });
+            }
+            localStorage.setItem(CRED_STORAGE_KEY, JSON.stringify(filtered.slice(0, 10)));
+        }
+
+        // 清除已保存的账号
+        function clearCredential(username) {
+            const creds = loadSavedCredentials().filter(c => c.username !== username);
+            localStorage.setItem(CRED_STORAGE_KEY, JSON.stringify(creds));
+        }
+
+        // 填充账号下拉列表 & 自动登录
+        function initLoginForm() {
+            const usernameInput = document.getElementById('loginUsername');
+            const passwordInput = document.getElementById('loginPassword');
+            const rememberCheckbox = document.getElementById('rememberMe');
+            const datalist = document.getElementById('savedUsernames');
+
+            const creds = loadSavedCredentials();
+
+            // 填充下拉选项
+            creds.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.username;
+                datalist.appendChild(opt);
+            });
+
+            // 有记住的账号时自动填入第一个
+            if (creds.length > 0) {
+                const first = creds[0];
+                usernameInput.value = first.username;
+                try {
+                    passwordInput.value = decodeURIComponent(escape(atob(first.password)));
+                } catch { passwordInput.value = ''; }
+                rememberCheckbox.checked = true;
+            }
+
+            // 选择下拉账号时自动补全密码
+            usernameInput.addEventListener('change', () => {
+                const matched = creds.find(c => c.username === usernameInput.value);
+                if (matched) {
+                    try {
+                        passwordInput.value = decodeURIComponent(escape(atob(matched.password)));
+                    } catch { passwordInput.value = ''; }
+                    rememberCheckbox.checked = true;
+                } else {
+                    passwordInput.value = '';
+                    rememberCheckbox.checked = false;
+                }
+            });
+
+            // 如果有已保存的账号密码，尝试自动登录（仅在页面初次加载时）
+            if (creds.length > 0 && usernameInput.value && passwordInput.value && !currentUser) {
+                setTimeout(() => {
+                    document.getElementById('loginForm').dispatchEvent(new Event('submit'));
+                }, 100);
+            }
+        }
+
+        // ==================== 认证检查 ====================
+
+        async function checkAuth() {
+            try {
+                const response = await fetch('/api/auth/me', {
+                    headers: { 'X-Auth-Scope': 'explorer' }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    currentUser = data.username;
+                    const userRole = data.role;
+                    updateAuthDebugBadge(currentUser);
+                    
+                    // 重要：确保当前页面是用户文件浏览器，不要重定向到管理员控制台
+                    // 无论什么角色，访问 /explorer 就显示文件浏览器
+                    showExplorer();
+                } else {
+                    updateAuthDebugBadge('-');
+                    // 未登录，显示登录页面
+                    document.getElementById('loginPage').classList.remove('hidden');
+                    document.getElementById('explorerPage').classList.add('hidden');
+                }
+            } catch (error) {
+                updateAuthDebugBadge('-');
+                // 认证失败，显示登录页面
+                document.getElementById('loginPage').classList.remove('hidden');
+                document.getElementById('explorerPage').classList.add('hidden');
+            }
+        }
+
+        // ==================== 登录处理 ====================
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            const submitBtn = document.getElementById('submitBtn');
+            const errorDiv = document.getElementById('loginError');
+            const errorText = document.getElementById('errorText');
+            
+            errorDiv.classList.add('hidden');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>登录中...';
+            
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password, isolated: true, next: '/explorer', scope: 'explorer' })
+                });
+
+                if (response.ok && response.redirected) {
+                    const remember = document.getElementById('rememberMe').checked;
+                    saveCredential(username, password, remember);
+                    window.location.href = response.url;
+                    return;
+                }
+
+                const data = await response.json().catch(() => ({}));
+                if (response.ok && data.success) {
+                    const remember = document.getElementById('rememberMe').checked;
+                    saveCredential(username, password, remember);
+                    currentUser = data.username || username;
+                    updateAuthDebugBadge(currentUser);
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>登录';
+                    showExplorer();
+                } else {
+                    throw new Error(data.error || '用户名或密码错误');
+                }
+            } catch (error) {
+                errorText.textContent = error.message;
+                errorDiv.classList.remove('hidden');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>登录';
+            }
+        });
+
+        function showExplorer() {
+            document.getElementById('loginPage').classList.add('hidden');
+            document.getElementById('explorerPage').classList.remove('hidden');
+            document.getElementById('userWelcome').textContent = `欢迎，${currentUser}`;
+            loadFiles();
+            loadExamInfo();
+            setupDropZone();
+        }
+
+        async function logout() {
+            try {
+                await fetch('/api/auth/logout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Auth-Scope': 'explorer' },
+                    body: JSON.stringify({ scope: 'explorer' })
+                });
+            } catch (error) {}
+            // 清空所有状态
+            currentUser = null;
+            updateAuthDebugBadge('-');
+            authToken = null;
+            currentPath = '/';
+            files = [];
+            // 隐藏资源管理器页面
+            document.getElementById('explorerPage').classList.add('hidden');
+            // 显示登录页面（留在 /explorer 页面）
+            document.getElementById('loginPage').classList.remove('hidden');
+            // 重置表单并清空输入值
+            document.getElementById('loginForm').reset();
+            document.getElementById('loginUsername').value = '';
+            document.getElementById('loginPassword').value = '';
+            // 隐藏错误信息
+            document.getElementById('loginError').classList.add('hidden');
+            // 恢复登录按钮状态
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>登录';
+            // 更新浏览器历史，确保 URL 保持在 /explorer
+            history.replaceState(null, '', '/explorer');
+        }
+
+        // ==================== 文件加载与渲染 ====================
+
+        async function loadExamInfo() {
+            try {
+                const response = await explorerFetch('/api/exam/my-exams', {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                const paperBanner = document.getElementById('examPaperBanner');
+                const infoBanner = document.getElementById('examInfoBanner');
+                const content = document.getElementById('examInfoContent');
+                const status = document.getElementById('examPaperStatus');
+                
+                if (!response.ok) {
+                    paperBanner.classList.add('hidden');
+                    infoBanner.classList.add('hidden');
+                    return;
+                }
+                
+                const data = await response.json();
+                
+                if (!data.has_exams || !data.exams || data.exams.length === 0) {
+                    paperBanner.classList.add('hidden');
+                    infoBanner.classList.add('hidden');
+                    return;
+                }
+                
+                // Check if any exam has a distributed paper
+                const examWithPaper = data.exams.find(e => e.has_paper);
+                
+                if (examWithPaper) {
+                    // Show prominent paper banner
+                    paperBanner.classList.remove('hidden');
+                    infoBanner.classList.add('hidden');
+                    
+                    // Update paper banner content
+                    document.getElementById('examPaperName').textContent = examWithPaper.paper_name || '考试试卷';
+                    
+                    // Set up the paper path for navigation
+                    const paperPath = examWithPaper.distributed_paper_path || examWithPaper.student_dir;
+                    document.getElementById('examPaperPath').innerHTML = `<i class="fas fa-folder-open mr-1"></i>FTP 路径：${paperPath}`;
+                    
+                    // Store the paper info for access function
+                    window.currentExamPaper = examWithPaper;
+                } else {
+                    // Show waiting info banner
+                    paperBanner.classList.add('hidden');
+                    infoBanner.classList.remove('hidden');
+                    
+                    // Build exam info content
+                    let html = '';
+                    data.exams.forEach((exam, index) => {
+                        html += `<div class="flex items-center space-x-2 mb-1">`;
+                        html += `<i class="fas fa-book text-purple-500"></i>`;
+                        html += `<span class="font-medium">考试 ID：</span>`;
+                        html += `<span>${exam.exam_id}</span>`;
+                        html += `</div>`;
+                        html += `<div class="flex items-center space-x-2 ml-6">`;
+                        html += `<i class="fas fa-chair text-gray-400"></i>`;
+                        html += `<span class="font-medium">工位号：</span>`;
+                        html += `<span>${exam.seat_number}</span>`;
+                        html += `</div>`;
+                        if (index < data.exams.length - 1) {
+                            html += `<div class="border-b border-gray-200 my-2"></div>`;
+                        }
+                    });
+                    content.innerHTML = html;
+                    
+                    status.innerHTML = `
+                        <div class="flex items-center space-x-2 px-3 py-2 bg-yellow-100 rounded-lg">
+                            <i class="fas fa-clock text-yellow-600"></i>
+                            <div>
+                                <div class="text-sm font-medium text-yellow-800">等待分发</div>
+                                <div class="text-xs text-yellow-600">试卷即将到来</div>
+                            </div>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('加载考试信息失败:', error);
+                document.getElementById('examPaperBanner').classList.add('hidden');
+                document.getElementById('examInfoBanner').classList.add('hidden');
+            }
+        }
+        
+        function accessExamPaper() {
+            if (!window.currentExamPaper) {
+                showToast('未找到试卷信息', 'error');
+                return;
+            }
+            
+            const examPaper = window.currentExamPaper;
+            
+            // Navigate to the student's FTP root directory where the paper was distributed
+            // The file browser works relative to the user's home directory
+            currentPath = '/';
+            loadFiles();
+            
+            // Scroll to top to show the file list
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            
+            // Show which exam this is
+            if (examPaper.exam_id) {
+                showToast(`已进入考试目录：${examPaper.exam_id}`, 'info');
+            }
+        }
+
+        async function loadFiles() {
+            try {
+                const response = await explorerFetch(`/api/files?path=${encodeURIComponent(currentPath)}`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    files = data.files || [];
+                    renderFiles();
+                    updateBreadcrumb();
+                } else {
+                    showToast('加载文件失败', 'error');
+                }
+            } catch (error) {
+                console.error('加载文件失败:', error);
+                showToast('网络错误', 'error');
+            }
+        }
+
+        function renderFiles() {
+            const container = document.getElementById('filesContainer');
+            const parentDir = document.getElementById('parentDir');
+            const emptyState = document.getElementById('emptyState');
+            
+            parentDir.classList.toggle('hidden', currentPath === '/' || currentPath === '');
+            
+            Array.from(container.children).forEach(child => {
+                if (child.id !== 'parentDir') container.removeChild(child);
+            });
+            
+            if (files.length === 0) {
+                emptyState.classList.remove('hidden');
+            } else {
+                emptyState.classList.add('hidden');
+                files.forEach(file => {
+                    const item = createFileItem(file);
+                    container.appendChild(item);
+                });
+            }
+        }
+
+        function createFileItem(file) {
+            const div = document.createElement('div');
+            div.className = `file-item glass-card rounded-xl p-4 cursor-pointer transition-all ${viewMode === 'list' ? 'flex items-center space-x-4' : 'flex flex-col items-center'}`;
+            
+            const icon = file.is_directory 
+                ? '<i class="fas fa-folder text-4xl folder-icon mb-2"></i>'
+                : getFileIcon(file.name);
+            
+            const sizeDisplay = file.is_directory ? '' : formatFileSize(file.size);
+            
+            div.innerHTML = `
+                ${viewMode === 'grid' ? icon : `<div class="flex-shrink-0">${icon.replace('mb-2', '')}</div>`}
+                <div class="${viewMode === 'grid' ? 'text-center' : 'flex-1 min-w-0'}">
+                    <p class="font-medium text-gray-800 text-sm truncate">${file.name}</p>
+                    ${viewMode === 'grid' ? `<p class="text-xs text-gray-500 mt-1">${sizeDisplay || formatDate(file.modified)}</p>` : `<p class="text-xs text-gray-500">${sizeDisplay} · ${formatDate(file.modified)}</p>`}
+                </div>
+            `;
+            
+            div.addEventListener('dblclick', () => {
+                if (file.is_directory) navigateTo(file.path);
+                else downloadFile(file.path);
+            });
+            
+            div.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                showContextMenu(e, file);
+            });
+            
+            return div;
+        }
+
+        function getFileIcon(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            const icons = {
+                'pdf': '<i class="fas fa-file-pdf text-4xl text-red-500 mb-2"></i>',
+                'doc': '<i class="fas fa-file-word text-4xl text-blue-500 mb-2"></i>',
+                'docx': '<i class="fas fa-file-word text-4xl text-blue-500 mb-2"></i>',
+                'xls': '<i class="fas fa-file-excel text-4xl text-green-500 mb-2"></i>',
+                'xlsx': '<i class="fas fa-file-excel text-4xl text-green-500 mb-2"></i>',
+                'ppt': '<i class="fas fa-file-powerpoint text-4xl text-orange-500 mb-2"></i>',
+                'txt': '<i class="fas fa-file-alt text-4xl text-gray-500 mb-2"></i>',
+                'csv': '<i class="fas fa-file-csv text-4xl text-green-600 mb-2"></i>',
+                'jpg': '<i class="fas fa-file-image text-4xl text-purple-500 mb-2"></i>',
+                'png': '<i class="fas fa-file-image text-4xl text-purple-500 mb-2"></i>',
+                'mp4': '<i class="fas fa-file-video text-4xl text-red-600 mb-2"></i>',
+                'zip': '<i class="fas fa-file-archive text-4xl text-yellow-600 mb-2"></i>'
+            };
+            return icons[ext] || '<i class="fas fa-file text-4xl text-gray-400 mb-2"></i>';
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            const now = new Date();
+            const diff = now - date;
+            
+            if (diff < 60000) return '刚刚';
+            if (diff < 3600000) return Math.floor(diff / 60000) + '分钟前';
+            if (diff < 86400000) return Math.floor(diff / 3600000) + '小时前';
+            return date.toLocaleDateString('zh-CN');
+        }
+
+        // ==================== 导航与面包屑 ====================
+
+        function navigateTo(path) {
+            currentPath = path;
+            loadFiles();
+        }
+
+        function goToParent() {
+            if (currentPath === '/' || currentPath === '') return;
+            const parts = currentPath.split('/').filter(p => p);
+            parts.pop();
+            currentPath = '/' + parts.join('/') || '/';
+            loadFiles();
+        }
+
+        function updateBreadcrumb() {
+            const container = document.getElementById('breadcrumbContainer');
+            container.innerHTML = '';
+            
+            if (currentPath === '/' || currentPath === '') return;
+            
+            const parts = currentPath.split('/').filter(p => p);
+            let accumulatedPath = '';
+            
+            parts.forEach((part, index) => {
+                accumulatedPath += '/' + part;
+                
+                const separator = document.createElement('span');
+                separator.className = 'text-gray-400';
+                separator.textContent = '/';
+                container.appendChild(separator);
+                
+                const item = document.createElement('span');
+                item.className = 'breadcrumb-item hover:text-purple-600 font-medium';
+                item.textContent = part;
+                item.dataset.path = accumulatedPath;
+                item.onclick = () => navigateTo(accumulatedPath);
+                container.appendChild(item);
+            });
+        }
+
+        function refreshFiles() {
+            showToast('刷新中...', 'info');
+            loadFiles();
+        }
+
+        function toggleViewMode() {
+            viewMode = viewMode === 'grid' ? 'list' : 'grid';
+            document.getElementById('viewIcon').className = viewMode === 'grid' ? 'fas fa-th-large' : 'fas fa-list';
+            document.getElementById('viewText').textContent = viewMode === 'grid' ? '网格视图' : '列表视图';
+            renderFiles();
+        }
+
+        // ==================== 文件操作 ====================
+
+        async function downloadFile(path) {
+            try {
+                const response = await explorerFetch(`/api/download?path=${encodeURIComponent(path)}`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = path.split('/').pop();
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                    showToast('下载已开始', 'success');
+                } else {
+                    showToast('下载失败', 'error');
+                }
+            } catch (error) {
+                showToast('下载失败', 'error');
+            }
+        }
+
+        async function deleteFile(path) {
+            if (!confirm(`确定要删除 "${path}" 吗？`)) return;
+            
+            try {
+                const response = await explorerFetch('/api/delete', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Auth-Scope': 'explorer',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ path })
+                });
+                
+                const result = await response.json();
+                if (response.ok) {
+                    showToast('删除成功', 'success');
+                    loadFiles();
+                } else {
+                    showToast(result.error || '删除失败', 'error');
+                }
+            } catch (error) {
+                showToast('删除失败', 'error');
+            }
+        }
+
+        async function renameFile(oldPath, newName) {
+            try {
+                const response = await explorerFetch('/api/rename', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Auth-Scope': 'explorer',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ old_path: oldPath, new_name: newName })
+                });
+                
+                const result = await response.json();
+                if (response.ok) {
+                    showToast('重命名成功', 'success');
+                    loadFiles();
+                } else {
+                    showToast(result.error || '重命名失败', 'error');
+                }
+            } catch (error) {
+                showToast('重命名失败', 'error');
+            }
+        }
+
+        async function createNewFolder() {
+            document.getElementById('newFolderNameInput').value = '';
+            document.getElementById('createFolderModal').classList.remove('hidden');
+            document.getElementById('createFolderModal').classList.add('flex');
+            setTimeout(() => document.getElementById('newFolderNameInput').focus(), 100);
+        }
+
+        function closeCreateFolderModal() {
+            document.getElementById('createFolderModal').classList.add('hidden');
+            document.getElementById('createFolderModal').classList.remove('flex');
+        }
+
+        async function submitCreateFolder() {
+            const name = document.getElementById('newFolderNameInput').value.trim();
+            if (!name) {
+                showToast('请输入文件夹名称', 'error');
+                return;
+            }
+            
+            try {
+                const response = await explorerFetch('/api/mkdir', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Auth-Scope': 'explorer',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ name, path: currentPath })
+                });
+                
+                const result = await response.json();
+                if (response.ok) {
+                    showToast('文件夹创建成功', 'success');
+                    closeCreateFolderModal();
+                    loadFiles();
+                } else {
+                    showToast(result.error || '创建失败', 'error');
+                }
+            } catch (error) {
+                showToast('创建失败', 'error');
+            }
+        }
+
+        // ==================== 上传功能 ====================
+
+        function showUploadModal() {
+            document.getElementById('uploadModal').classList.remove('hidden');
+            document.getElementById('uploadModal').classList.add('flex');
+        }
+
+        function closeUploadModal() {
+            document.getElementById('uploadModal').classList.add('hidden');
+            document.getElementById('uploadModal').classList.remove('flex');
+            document.getElementById('uploadProgress').classList.add('hidden');
+        }
+
+        // 递归读取文件夹内容
+        function readEntry(entry, pathStack, fileList) {
+            return new Promise((resolve) => {
+                if (entry.isFile) {
+                    entry.file((file) => {
+                        // 保存相对路径信息
+                        file.relativePath = pathStack.join('/') + '/' + file.name;
+                        file.fullPath = pathStack.join('/') + '/' + file.name;
+                        fileList.push(file);
+                        resolve();
+                    });
+                } else if (entry.isDirectory) {
+                    const dirReader = entry.createReader();
+                    const readEntries = () => {
+                        dirReader.readEntries(async (entries) => {
+                            if (entries.length > 0) {
+                                for (const childEntry of entries) {
+                                    await readEntry(childEntry, [...pathStack, entry.name], fileList);
+                                }
+                                // 继续读取（某些浏览器可能分批返回）
+                                readEntries();
+                            } else {
+                                resolve();
+                            }
+                        });
+                    };
+                    readEntries();
+                } else {
+                    resolve();
+                }
+            });
+        }
+
+        // 从 DataTransferItems 中提取文件和文件夹
+        async function extractFilesFromDataTransfer(items) {
+            const fileList = [];
+            const promises = [];
+
+            for (const item of items) {
+                const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
+                if (entry) {
+                    promises.push(readEntry(entry, [], fileList));
+                }
+            }
+
+            await Promise.all(promises);
+            return fileList;
+        }
+
+        // 批量上传文件夹中的所有文件
+        async function handleFolderUpload(files) {
+            if (files.length === 0) return;
+            
+            let uploadedCount = 0;
+            let failedCount = 0;
+            
+            for (const file of files) {
+                try {
+                    await uploadFileWithRelativePath(file);
+                    uploadedCount++;
+                } catch (error) {
+                    console.error(`上传失败：${file.relativePath}`, error);
+                    failedCount++;
+                }
+            }
+            
+            const msg = `上传完成：${uploadedCount} 个文件成功`;
+            if (failedCount > 0) {
+                showToast(`${msg}, ${failedCount} 个失败`, 'error');
+            } else {
+                showToast(msg, 'success');
+            }
+            loadFiles();
+        }
+
+        // 上传单个文件（支持相对路径）
+        async function uploadFileWithRelativePath(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            // 如果有相对路径，添加到 formData 中
+            if (file.relativePath) {
+                formData.append('relativePath', file.relativePath);
+            }
+            
+            document.getElementById('uploadProgress').classList.remove('hidden');
+            document.getElementById('uploadFileName').textContent = file.relativePath || file.name;
+            
+            let progress = 0;
+            const interval = setInterval(() => {
+                progress = Math.min(progress + 10, 90);
+                document.getElementById('uploadPercent').textContent = progress + '%';
+                document.getElementById('uploadProgressBar').style.width = progress + '%';
+            }, 200);
+            
+            try {
+                const response = await explorerFetch(`/api/upload?path=${encodeURIComponent(currentPath)}`, {
+                    method: 'POST',
+                    headers: {
+                        'X-Auth-Scope': 'explorer',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: formData
+                });
+                
+                clearInterval(interval);
+                
+                if (response.ok) {
+                    document.getElementById('uploadPercent').textContent = '100%';
+                    document.getElementById('uploadProgressBar').style.width = '100%';
+                } else {
+                    throw new Error('上传失败');
+                }
+            } catch (error) {
+                clearInterval(interval);
+                throw error;
+            }
+        }
+
+        function setupDropZone() {
+            const dropZone = document.getElementById('dropZone');
+            const uploadDropZone = document.getElementById('uploadDropZone');
+            const fileInput = document.getElementById('fileInput');
+            const folderInput = document.getElementById('folderInput');
+            
+            // 主拖拽区域 - 支持文件和文件夹
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(event => {
+                dropZone.addEventListener(event, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (event === 'dragover' || event === 'dragenter') {
+                        dropZone.classList.add('active');
+                    } else if (event === 'dragleave') {
+                        dropZone.classList.remove('active');
+                    } else if (event === 'drop') {
+                        dropZone.classList.remove('active');
+                        handleDrop(e.dataTransfer);
+                    }
+                });
+            });
+            
+            // 上传模态框拖拽区域
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(event => {
+                uploadDropZone.addEventListener(event, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (event === 'dragover' || event === 'dragenter') {
+                        uploadDropZone.classList.add('active');
+                    } else if (event === 'dragleave') {
+                        uploadDropZone.classList.remove('active');
+                    } else if (event === 'drop') {
+                        uploadDropZone.classList.remove('active');
+                        handleDrop(e.dataTransfer);
+                    }
+                });
+            });
+            
+            // 处理拖拽放置（支持文件夹）
+            async function handleDrop(dataTransfer) {
+                const items = dataTransfer.items;
+                let hasFolders = false;
+                
+                // 检查是否有文件夹
+                for (const item of items) {
+                    const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
+                    if (entry && entry.isDirectory) {
+                        hasFolders = true;
+                        break;
+                    }
+                }
+                
+                if (hasFolders) {
+                    // 有文件夹，使用 webkitGetAsEntry 递归读取
+                    const files = await extractFilesFromDataTransfer(items);
+                    await handleFolderUpload(files);
+                } else {
+                    // 只有文件，直接使用 files
+                    const files = Array.from(dataTransfer.files);
+                    for (const file of files) {
+                        await uploadFile(file);
+                    }
+                }
+            }
+            
+            // 文件输入框
+            fileInput.addEventListener('change', async (e) => {
+                const files = Array.from(e.target.files);
+                for (const file of files) {
+                    await uploadFile(file);
+                }
+            });
+            
+            // 文件夹输入框
+            folderInput.addEventListener('change', async (e) => {
+                const files = Array.from(e.target.files);
+                if (files.length > 0) {
+                    await handleFolderUpload(files);
+                }
+            });
+        }
+
+        async function handleFiles(fileList) {
+            for (const file of fileList) {
+                await uploadFile(file);
+            }
+        }
+
+        async function uploadFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            document.getElementById('uploadProgress').classList.remove('hidden');
+            document.getElementById('uploadFileName').textContent = file.name;
+            
+            let progress = 0;
+            const interval = setInterval(() => {
+                progress = Math.min(progress + 10, 90);
+                document.getElementById('uploadPercent').textContent = progress + '%';
+                document.getElementById('uploadProgressBar').style.width = progress + '%';
+            }, 200);
+            
+            try {
+                const response = await explorerFetch(`/api/upload?path=${encodeURIComponent(currentPath)}`, {
+                    method: 'POST',
+                    headers: {
+                        'X-Auth-Scope': 'explorer',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: formData
+                });
+                
+                clearInterval(interval);
+                
+                if (response.ok) {
+                    document.getElementById('uploadPercent').textContent = '100%';
+                    document.getElementById('uploadProgressBar').style.width = '100%';
+                    showToast(`${file.name} 上传成功`, 'success');
+                    setTimeout(() => {
+                        document.getElementById('uploadProgress').classList.add('hidden');
+                        loadFiles();
+                    }, 500);
+                } else {
+                    showToast(`${file.name} 上传失败`, 'error');
+                }
+            } catch (error) {
+                clearInterval(interval);
+                showToast(`${file.name} 上传失败`, 'error');
+            }
+        }
+
+        // ==================== 右键菜单 ====================
+
+        function showContextMenu(e, file) {
+            contextTarget = file;
+            const menu = document.getElementById('contextMenu');
+            menu.style.left = e.pageX + 'px';
+            menu.style.top = e.pageY + 'px';
+            menu.classList.remove('hidden');
+            
+            setTimeout(() => {
+                const closeMenu = () => {
+                    menu.classList.add('hidden');
+                    document.removeEventListener('click', closeMenu);
+                };
+                document.addEventListener('click', closeMenu);
+            }, 100);
+        }
+
+        function contextAction(action) {
+            if (!contextTarget) return;
+            
+            switch (action) {
+                case 'download':
+                    if (!contextTarget.is_directory) downloadFile(contextTarget.path);
+                    break;
+                case 'rename':
+                    document.getElementById('newNameInput').value = contextTarget.name;
+                    document.getElementById('renameModal').classList.remove('hidden');
+                    document.getElementById('renameModal').classList.add('flex');
+                    setTimeout(() => document.getElementById('newNameInput').focus(), 100);
+                    break;
+                case 'delete':
+                    deleteFile(contextTarget.path);
+                    break;
+                case 'share':
+                    showShareModal(contextTarget);
+                    break;
+            }
+            document.getElementById('contextMenu').classList.add('hidden');
+        }
+
+        function closeRenameModal() {
+            document.getElementById('renameModal').classList.add('hidden');
+            document.getElementById('renameModal').classList.remove('flex');
+        }
+
+        async function submitRename() {
+            const newName = document.getElementById('newNameInput').value.trim();
+            if (!newName || newName === contextTarget.name) {
+                closeRenameModal();
+                return;
+            }
+            await renameFile(contextTarget.path, newName);
+            closeRenameModal();
+        }
+
+        // ==================== 分享功能 ====================
+
+        function showShareModal(file) {
+            contextTarget = file;
+            const baseUrl = window.location.origin;
+            const shareId = 'share_' + Date.now();
+            document.getElementById('shareLink').value = `${baseUrl}/s/${shareId}`;
+            document.getElementById('shareModal').classList.remove('hidden');
+            document.getElementById('shareModal').classList.add('flex');
+        }
+
+        function closeShareModal() {
+            document.getElementById('shareModal').classList.add('hidden');
+            document.getElementById('shareModal').classList.remove('flex');
+        }
+
+        function copyShareLink() {
+            const linkInput = document.getElementById('shareLink');
+            linkInput.select();
+            document.execCommand('copy');
+            showToast('链接已复制', 'success');
+        }
+
+        async function createShare() {
+            const password = document.getElementById('sharePassword').value;
+            const expireDays = parseInt(document.getElementById('shareExpireDays').value);
+            
+            try {
+                const response = await explorerFetch('/api/share/create', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Auth-Scope': 'explorer',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        file_path: contextTarget.path,
+                        password: password || null,
+                        expire_days: expireDays
+                    })
+                });
+                
+                const result = await response.json();
+                if (response.ok) {
+                    document.getElementById('shareLink').value = result.share_url;
+                    showToast('分享链接已生成', 'success');
+                } else {
+                    showToast(result.error || '生成失败', 'error');
+                }
+            } catch (error) {
+                showToast('生成失败', 'error');
+            }
+        }
+
+        // ==================== 搜索功能 ====================
+
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase();
+            const container = document.getElementById('filesContainer');
+            
+            Array.from(container.children).forEach(child => {
+                if (child.id === 'parentDir') return;
+                const name = child.querySelector('p.font-medium').textContent.toLowerCase();
+                child.style.display = (query === '' || name.includes(query)) ? '' : 'none';
+            });
+        });
+
+        // ==================== Toast 通知 ====================
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toastMessage');
+            const toastIcon = document.getElementById('toastIcon');
+            
+            const icons = {
+                success: 'fa-check-circle text-green-500',
+                error: 'fa-times-circle text-red-500',
+                info: 'fa-info-circle text-blue-500'
+            };
+            
+            toastMessage.textContent = message;
+            toastIcon.className = `fas ${icons[type]} text-xl`;
+            toast.classList.remove('translate-x-full');
+            
+            setTimeout(() => toast.classList.add('translate-x-full'), 3000);
+        }
+
+        // ==================== 键盘快捷键 ====================
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeUploadModal();
+                closeRenameModal();
+                closeCreateFolderModal();
+                closeShareModal();
+                document.getElementById('contextMenu').classList.add('hidden');
+            }
+            if (e.key === 'F5' && !document.getElementById('loginPage').classList.contains('hidden')) {
+                e.preventDefault();
+                refreshFiles();
+            }
+        });
+
+        // ==================== 初始化 ====================
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initLoginForm();
+            checkAuth();
+        });
+    </script>
+</body>
+</html>

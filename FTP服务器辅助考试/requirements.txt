@@ -1,0 +1,8 @@
+pyftpdlib==2.0.1
+flask==2.3.3
+flask-login==0.6.3
+sqlalchemy==2.0.23
+pymysql==1.1.0
+bcrypt==4.1.2
+werkzeug==2.3.7
+psutil==5.9.5

@@ -1,0 +1,2351 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理控制台 - FTP 文件管理系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.0/chart.min.js"></script>
+    <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#6366F1',
+                        success: '#10B981',
+                        warning: '#F59E0B',
+                        danger: '#EF4444'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+        .transition-all { transition: all 0.3s ease; }
+        .sidebar-item:hover {
+            background: rgba(59, 130, 246, 0.1);
+        }
+        .sidebar-item.active {
+            background: rgba(59, 130, 246, 0.15);
+            border-right: 3px solid #3B82F6;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .btn-primary:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+        .table-row:hover {
+            background: rgba(59, 130, 246, 0.05);
+        }
+        .status-indicator {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .log-entry {
+            font-family: 'Courier New', monospace;
+            font-size: 0.875rem;
+        }
+        .modal-overlay {
+            background: rgba(0, 0, 0, 0.5);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="app" class="flex">
+        <!-- Sidebar -->
+        <aside class="w-64 bg-white shadow-lg min-h-screen fixed left-0 top-0 z-50">
+            <div class="p-6 border-b border-gray-200">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 gradient-bg rounded-lg flex items-center justify-center">
+                        <i class="fas fa-server text-white text-xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-lg font-bold text-gray-800">FTP 管理</h1>
+                        <p class="text-xs text-gray-500">控制面板</p>
+                    </div>
+                </div>
+            </div>
+            
+            <nav class="p-4 space-y-2">
+                <a href="#" class="sidebar-item active flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-700 transition-all cursor-pointer" data-page="dashboard">
+                    <i class="fas fa-chart-line w-5"></i>
+                    <span class="font-medium">仪表盘</span>
+                </a>
+                <a href="#" class="sidebar-item flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-700 transition-all cursor-pointer" data-page="users">
+                    <i class="fas fa-users w-5"></i>
+                    <span class="font-medium">用户管理</span>
+                </a>
+                <a href="#" class="sidebar-item flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-700 transition-all cursor-pointer" data-page="server">
+                    <i class="fas fa-cog w-5"></i>
+                    <span class="font-medium">服务器配置</span>
+                </a>
+                <a href="#" class="sidebar-item flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-700 transition-all cursor-pointer" data-page="logs">
+                    <i class="fas fa-file-alt w-5"></i>
+                    <span class="font-medium">日志查看</span>
+                </a>
+                <a href="#" class="sidebar-item flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-700 transition-all cursor-pointer" data-page="exam">
+                    <i class="fas fa-graduation-cap w-5"></i>
+                    <span class="font-medium">考试管理</span>
+                </a>
+            </nav>
+            
+            <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200">
+                <div class="space-y-3">
+                    <!-- 返回统一门户按钮 -->
+                    <a href="/" class="flex items-center justify-center space-x-2 w-full px-4 py-2 bg-gradient-to-r from-purple-500 to-indigo-500 text-white rounded-lg hover:opacity-90 transition-all shadow-md">
+                        <i class="fas fa-home"></i>
+                        <span class="font-medium text-sm">返回统一门户</span>
+                    </a>
+                    
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-3">
+                            <div id="serverRunningIndicator" class="w-3 h-3 bg-gray-400 rounded-full"></div>
+                            <span id="serverRunningText" class="text-sm text-gray-600">加载中</span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <span id="connectionStatusText" class="text-xs text-gray-400">连接中...</span>
+                        </div>
+                        <span id="dbStatusBadge" class="text-xs px-2 py-1 rounded bg-gray-100 text-gray-600">DB: 检测中</span>
+                        <button onclick="logout()" class="text-gray-500 hover:text-red-600" title="退出">
+                            <i class="fas fa-sign-out-alt"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="ml-64 flex-1 p-8">
+            <!-- Dashboard Page -->
+            <div id="dashboardPage" class="page-content">
+                <div class="mb-8">
+                    <h2 class="text-3xl font-bold text-gray-800 mb-2">仪表盘</h2>
+                    <p class="text-gray-600">实时监控 FTP 服务器状态</p>
+                </div>
+
+                <!-- Stats Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <div class="glass-card stat-card rounded-xl p-6 transition-all shadow-md">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-users text-blue-600 text-xl"></i>
+                            </div>
+                            <span class="text-2xl font-bold text-gray-800" id="activeConnections">0</span>
+                        </div>
+                        <h3 class="text-gray-600 text-sm font-medium">
+                            <i class="fas fa-wifi text-xs text-green-500 mr-1"></i>活跃连接
+                        </h3>
+                    </div>
+
+                    <div class="glass-card stat-card rounded-xl p-6 transition-all shadow-md">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-hdd text-green-600 text-xl"></i>
+                            </div>
+                            <span class="text-2xl font-bold text-gray-800" id="totalUsers">0</span>
+                        </div>
+                        <h3 class="text-gray-600 text-sm font-medium">
+                            <i class="fas fa-user-check text-xs text-green-500 mr-1"></i>总用户数
+                        </h3>
+                    </div>
+
+                    <div class="glass-card stat-card rounded-xl p-6 transition-all shadow-md">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-exchange-alt text-purple-600 text-xl"></i>
+                            </div>
+                            <span class="text-2xl font-bold text-gray-800" id="dataTransferred">0 KB</span>
+                        </div>
+                        <h3 class="text-gray-600 text-sm font-medium">
+                            <i class="fas fa-sync-alt text-xs text-blue-500 mr-1"></i>数据传输量
+                        </h3>
+                    </div>
+
+                    <div class="glass-card stat-card rounded-xl p-6 transition-all shadow-md">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-clock text-orange-600 text-xl"></i>
+                            </div>
+                            <span class="text-2xl font-bold text-gray-800" id="uptime">0h</span>
+                        </div>
+                        <h3 class="text-gray-600 text-sm font-medium">
+                            <i class="fas fa-play-circle text-xs text-orange-500 mr-1"></i>运行时间
+                        </h3>
+                    </div>
+                </div>
+
+                <!-- Charts Row -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                    <div class="glass-card rounded-xl p-6 shadow-md">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">连接趋势</h3>
+                        <canvas id="connectionChart" height="200"></canvas>
+                    </div>
+                    <div class="glass-card rounded-xl p-6 shadow-md">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">磁盘使用情况</h3>
+                        <canvas id="diskChart" height="200"></canvas>
+                    </div>
+                </div>
+
+                <!-- Recent Activity & Online Users -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- 最近活动 -->
+                    <div class="glass-card rounded-xl p-6 shadow-md">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-semibold text-gray-800">
+                                <i class="fas fa-history mr-2 text-blue-600"></i>最近活动
+                            </h3>
+                            <span class="text-xs text-gray-500">
+                                <i class="fas fa-clock mr-1"></i>实时刷新
+                            </span>
+                        </div>
+                        <div class="space-y-3" id="recentActivity">
+                            <div class="flex items-center space-x-3 text-gray-600 text-sm">
+                                <i class="fas fa-circle-notch fa-spin text-blue-500 text-xs"></i>
+                                <span>加载活动中...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 在线用户列表 -->
+                    <div class="glass-card rounded-xl p-6 shadow-md">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-semibold text-gray-800">
+                                <i class="fas fa-users mr-2 text-green-600"></i>在线用户
+                            </h3>
+                            <span id="onlineCount" class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">0 人</span>
+                        </div>
+                        <div class="space-y-2 max-h-48 overflow-auto" id="onlineUsersList">
+                            <div class="flex items-center space-x-3 text-gray-600 text-sm">
+                                <i class="fas fa-circle-notch fa-spin text-green-500 text-xs"></i>
+                                <span>加载中...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 磁盘使用 TOP5 -->
+                <div class="glass-card rounded-xl p-6 shadow-md mt-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800">
+                            <i class="fas fa-chart-bar mr-2 text-purple-600"></i>磁盘使用 TOP5
+                        </h3>
+                        <span class="text-xs text-gray-500">配额使用率最高用户</span>
+                    </div>
+                    <div class="space-y-3" id="topUsersUsage">
+                        <div class="flex items-center space-x-3 text-gray-600 text-sm">
+                            <i class="fas fa-circle-notch fa-spin text-purple-500 text-xs"></i>
+                            <span>加载数据中...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Users Page -->
+            <div id="usersPage" class="page-content hidden">
+                <div class="mb-8 flex items-center justify-between">
+                    <div>
+                        <h2 class="text-3xl font-bold text-gray-800 mb-2">用户管理</h2>
+                        <p class="text-gray-600">管理 FTP 服务器用户账户</p>
+                    </div>
+                    <button onclick="showAddUserModal()" class="btn-primary text-white px-6 py-3 rounded-lg font-medium transition-all shadow-lg">
+                        <i class="fas fa-plus mr-2"></i>添加用户
+                    </button>
+                </div>
+
+                <div class="glass-card rounded-xl shadow-md overflow-hidden">
+                    <table class="w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">用户名</th>
+                                <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">角色</th>
+                                <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">主目录</th>
+                                <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">权限</th>
+                                <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">配额</th>
+                                <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">限速</th>
+                                <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">状态</th>
+                                <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTableBody" class="divide-y divide-gray-200">
+                            <!-- 用户数据将通过 JS 动态加载 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Server Config Page -->
+            <div id="serverPage" class="page-content hidden">
+                <div class="mb-8">
+                    <h2 class="text-3xl font-bold text-gray-800 mb-2">服务器配置</h2>
+                    <p class="text-gray-600">配置 FTP 服务器参数</p>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="glass-card rounded-xl p-6 shadow-md">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-6">基本配置</h3>
+                        <form id="serverConfigForm" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">监听地址</label>
+                                <input type="text" id="configAddress" value="0.0.0.0" 
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">端口</label>
+                                <input type="number" id="configPort" value="2121" 
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">最大连接数</label>
+                                <input type="number" id="configMaxConnections" value="256" 
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">超时时间 (秒)</label>
+                                <input type="number" id="configTimeout" value="300" 
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">欢迎标语</label>
+                                <input type="text" id="configBanner" value="Welcome to Inscode FTP Server" 
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="glass-card rounded-xl p-6 shadow-md">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-6">服务器控制</h3>
+                        
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                                <div>
+                                    <p class="font-medium text-gray-800">服务器状态</p>
+                                    <p id="serverControlStatus" class="text-sm text-gray-600">未运行</p>
+                                </div>
+                                <div id="serverControlIndicator" class="w-4 h-4 bg-gray-400 rounded-full"></div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-4">
+                                <button onclick="startServer()" id="btnStartServer"
+                                    class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-all">
+                                    <i class="fas fa-play mr-2"></i>启动
+                                </button>
+                                <button onclick="stopServer()" id="btnStopServer"
+                                    class="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-medium transition-all">
+                                    <i class="fas fa-stop mr-2"></i>停止
+                                </button>
+                            </div>
+                            
+                            <button onclick="restartServer()" id="btnRestartServer"
+                                class="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-all">
+                                <i class="fas fa-redo mr-2"></i>重启
+                            </button>
+
+                            <button onclick="saveConfig()" 
+                                class="w-full btn-primary text-white px-6 py-3 rounded-lg font-medium transition-all shadow-lg">
+                                <i class="fas fa-save mr-2"></i>保存配置
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Logs Page -->
+            <div id="logsPage" class="page-content hidden">
+                <div class="mb-8 flex items-center justify-between">
+                    <div>
+                        <h2 class="text-3xl font-bold text-gray-800 mb-2">操作日志</h2>
+                        <p class="text-gray-600">查看系统操作记录</p>
+                    </div>
+                    <div class="flex space-x-3">
+                        <input type="text" id="logFilter" placeholder="搜索用户名..." 
+                            class="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                        <button onclick="refreshLogs()" class="btn-primary text-white px-4 py-2 rounded-lg text-sm transition-all">
+                            <i class="fas fa-sync-alt mr-2"></i>刷新
+                        </button>
+                    </div>
+                </div>
+
+                <div class="glass-card rounded-xl shadow-md overflow-hidden">
+                    <div id="logsTerminal" class="bg-gray-900 text-green-300 text-xs font-mono p-4 h-[500px] overflow-auto whitespace-pre-wrap">
+                        [系统] 日志流初始化中...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Exam Management Page (Embedded) -->
+            <div id="examPage" class="page-content hidden">
+                <div class="mb-8">
+                    <h2 class="text-3xl font-bold text-gray-800 mb-2">考试管理</h2>
+                    <p class="text-gray-600">辅助考试全流程管理 - 生成考生、分发试卷、一键清场</p>
+                </div>
+
+                <!-- 考试管理主面板 -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- 左侧：操作面板 -->
+                    <div class="lg:col-span-1 space-y-6">
+                        <!-- 创建考生 -->
+                        <div class="glass-card rounded-xl p-6 shadow-md">
+                            <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                                <i class="fas fa-users-cog text-blue-600 mr-2"></i>创建考生账号
+                            </h3>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">考试 ID</label>
+                                    <input type="text" id="examId" placeholder="例如：midterm2024" 
+                                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                    <p class="text-xs text-gray-500 mt-1">只能包含字母、数字、下划线和连字符</p>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">考生数量</label>
+                                    <input type="number" id="studentCount" min="1" max="500" value="30" 
+                                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">存储配额 (MB)</label>
+                                    <input type="number" id="studentQuota" min="0" value="100" 
+                                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                    <p class="text-xs text-gray-500 mt-1">0 = 无限制</p>
+                                </div>
+                                <button onclick="createExamUsers()" 
+                                    class="w-full btn-primary text-white px-6 py-3 rounded-lg font-medium transition-all shadow-lg">
+                                    <i class="fas fa-plus-circle mr-2"></i>生成考生账号
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 上传试卷到池 -->
+                        <div class="glass-card rounded-xl p-6 shadow-md">
+                            <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                                <i class="fas fa-folder-open text-green-600 mr-2"></i>上传试卷到池
+                            </h3>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">选择考试</label>
+                                    <select id="examSelect" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                        <option value="">-- 选择考试 --</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">试卷文件</label>
+                                    <div id="dropZone" class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-500 transition-colors cursor-pointer">
+                                        <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-2"></i>
+                                        <p class="text-sm text-gray-600">点击或拖拽上传文件</p>
+                                        <p class="text-xs text-gray-500 mt-1">支持多文件、ZIP 自动解压</p>
+                                        <input type="file" id="examFile" class="hidden" accept=".zip,.pdf,.doc,.docx,.txt" multiple>
+                                    </div>
+                                    <p id="fileName" class="text-xs text-gray-500 mt-2"></p>
+                                </div>
+                                <button onclick="uploadPapersToPool()" 
+                                    class="w-full bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-all shadow-lg">
+                                    <i class="fas fa-upload mr-2"></i>上传到试卷池
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="glass-card rounded-xl p-6 shadow-md">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-lg font-semibold text-gray-800">
+                                    <i class="fas fa-folder text-indigo-600 mr-2"></i>试卷池管理
+                                </h3>
+                                <div class="flex space-x-2">
+                                    <button onclick="refreshCurrentExamPapers()" class="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded text-sm">
+                                        刷新
+                                    </button>
+                                    <button onclick="clearExamPapers()" class="px-3 py-1 bg-red-100 hover:bg-red-200 text-red-700 rounded text-sm">
+                                        清空
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="examPapersList" class="space-y-2 max-h-60 overflow-auto text-sm text-gray-600">
+                                <div class="text-gray-400">请选择考试以查看试卷池</div>
+                            </div>
+                        </div>
+
+                        <!-- 随机分卷 -->
+                        <div class="glass-card rounded-xl p-6 shadow-md">
+                            <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                                <i class="fas fa-random text-blue-600 mr-2"></i>随机分卷
+                            </h3>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">选择考试</label>
+                                    <select id="examSelectDistribute" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                        <option value="">-- 选择考试 --</option>
+                                    </select>
+                                </div>
+                                <p class="text-xs text-gray-500">从试卷池中随机抽取一份试卷分发给每位考生</p>
+                                <button onclick="distributeExamFiles()" 
+                                    class="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-all shadow-lg">
+                                    <i class="fas fa-share-alt mr-2"></i>开始随机分卷
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 清除考试 -->
+                        <div class="glass-card rounded-xl p-6 shadow-md border-l-4 border-red-500">
+                            <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                                <i class="fas fa-trash-alt text-red-600 mr-2"></i>清除考试数据
+                            </h3>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">选择考试</label>
+                                    <select id="examSelectCleanup" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                        <option value="">-- 选择考试 --</option>
+                                    </select>
+                                </div>
+                                <button onclick="cleanupExam()" 
+                                    class="w-full bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-medium transition-all shadow-lg">
+                                    <i class="fas fa-exclamation-triangle mr-2"></i>一键清场
+                                </button>
+                                <p class="text-xs text-red-500">⚠️ 此操作将删除所有考生账号及其文件，不可恢复！</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 右侧：考生列表 -->
+                    <div class="lg:col-span-2">
+                        <div class="glass-card rounded-xl p-6 shadow-md h-full">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-lg font-semibold text-gray-800">
+                                    <i class="fas fa-list-ul text-purple-600 mr-2"></i>考生列表
+                                </h3>
+                                <div class="flex space-x-2">
+                                    <button onclick="exportStudentsCSV()" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm transition-all">
+                                        <i class="fas fa-download mr-1"></i>导出 CSV
+                                    </button>
+                                    <button onclick="loadExamHistory()" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg text-sm transition-all">
+                                        <i class="fas fa-sync-alt mr-1"></i>刷新
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- 考生表格 -->
+                            <div class="overflow-auto max-h-[600px]">
+                                <table class="w-full">
+                                    <thead class="bg-gray-50 sticky top-0">
+                                        <tr>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">用户名</th>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">密码</th>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">主目录</th>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">配额</th>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">已用</th>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">状态</th>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="studentsTableBody" class="divide-y divide-gray-200">
+                                        <tr>
+                                            <td colspan="7" class="px-4 py-8 text-center text-gray-500">
+                                                <i class="fas fa-circle-notch fa-spin mr-2"></i>加载中...
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div id="studentsPagination" class="mt-4 flex items-center justify-between hidden">
+                                <div id="studentsPageInfo" class="text-sm text-gray-500"></div>
+                                <div class="flex items-center space-x-2">
+                                    <button id="studentsPrevBtn" class="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded disabled:opacity-50 disabled:cursor-not-allowed">上一页</button>
+                                    <button id="studentsNextBtn" class="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded disabled:opacity-50 disabled:cursor-not-allowed">下一页</button>
+                                </div>
+                            </div>
+                            
+                            <!-- 空状态 -->
+                            <div id="noStudentsState" class="hidden text-center py-12">
+                                <i class="fas fa-inbox text-6xl text-gray-300 mb-4"></i>
+                                <p class="text-gray-500">暂无考生数据</p>
+                                <p class="text-sm text-gray-400 mt-2">请先创建考生账号或选择考试</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Add User Modal -->
+    <div id="addUserModal" class="fixed inset-0 modal-overlay hidden items-center justify-center z-50">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-xl font-bold text-gray-800">添加新用户</h3>
+            </div>
+            <form id="addUserForm" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">用户名</label>
+                    <input type="text" id="newUsername" required
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">密码</label>
+                    <input type="password" id="newPassword" required
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">主目录</label>
+                    <input type="text" id="newHomeDir" value="./ftp_root/" required
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">权限</label>
+                    <select id="newPermissions" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <option value="elr">只读 (elr)</option>
+                        <option value="elradfmw">完全访问 (elradfmw)</option>
+                        <option value="elradfmwMT">完全访问 + 目录操作 (elradfmwMT)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">存储配额 (MB, 0=无限制)</label>
+                    <input type="number" id="newQuota" value="0" min="0"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">速度限制 (KB/s, 0=无限制)</label>
+                    <input type="number" id="newSpeedLimit" value="0" min="0"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+            </form>
+            <div class="p-6 border-t border-gray-200 flex justify-end space-x-3">
+                <button onclick="closeAddUserModal()" class="px-6 py-2 text-gray-600 hover:text-gray-800 transition-all">取消</button>
+                <button onclick="submitAddUser()" class="btn-primary text-white px-6 py-2 rounded-lg transition-all">添加</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification (全局) -->
+    <div id="toast" class="fixed top-4 right-4 transform translate-x-full transition-all duration-300 z-50">
+        <div class="bg-white rounded-lg shadow-lg p-4 flex items-center space-x-3">
+            <i id="toastIcon" class="fas fa-check-circle text-green-500 text-xl"></i>
+            <span id="toastMessage" class="text-gray-800 font-medium">操作成功</span>
+        </div>
+    </div>
+
+    <!-- Toast Notification (考试模块专用) -->
+    <div id="exam-toast" class="fixed top-4 right-4 transform translate-x-full transition-all duration-300 z-50">
+        <div class="bg-white rounded-lg shadow-lg p-4 flex items-center space-x-3">
+            <i id="exam-toast-icon" class="fas fa-check-circle text-green-500 text-xl"></i>
+            <span id="exam-toast-message" class="text-gray-800 font-medium">操作成功</span>
+        </div>
+    </div>
+    
+    <!-- Auth Debug Badge -->
+    <div id="authDebugBadge" class="fixed bottom-4 right-4 bg-gray-900 text-white text-xs px-3 py-2 rounded-lg shadow-lg z-50 opacity-90">
+        scope: admin | user: -
+    </div>
+
+    <!-- 引入辅助考试内嵌组件 -->
+    <script src="/static/js/embedded-exam.js"></script>
+
+    <script>
+        // 全局状态
+        let currentUser = null;
+        let serverStatus = { is_running: false };
+        let connectionChart, diskChart;
+        let logsEventSource = null;
+        let isConnected = false;
+        let examHistoryLoaded = false;
+        let examStudentsCache = [];
+        let examStudentsPage = 1;
+        const examStudentsPageSize = 50;
+        let uptimeSeconds = 0;
+        let uptimeTimer = null;
+        let refreshTimer = null;
+        let dashboardLoaded = false;
+
+        // 统一认证 fetch：自动带上 admin 作用域，Cookie 自动随请求发送
+        function adminFetch(url, options = {}) {
+            return fetch(url, {
+                ...options,
+                headers: {
+                    ...options.headers,
+                    'X-Auth-Scope': 'admin'
+                }
+            });
+        }
+
+        function updateAuthDebugBadge(username) {
+            const badge = document.getElementById('authDebugBadge');
+            if (!badge) return;
+            badge.textContent = `scope: admin | user: ${username || '-'}`;
+        }
+
+        function startPeriodicRefresh() {
+            if (refreshTimer) return;
+            refreshTimer = setInterval(() => refreshData(), 5000);
+        }
+
+        // ==================== 认证检查 ====================
+        let _authReady = false;  // checkAuth 完成且成功后才允许数据请求
+
+        async function checkAuth() {
+            if (_authReady) return;
+            try {
+                const response = await fetch('/api/auth/me', {
+                    headers: { 'X-Auth-Scope': 'admin' }
+                });
+                if (!response.ok) {
+                    updateAuthDebugBadge('-');
+                    window.location.href = '/login?next=' + encodeURIComponent('/admin');
+                    return;
+                }
+                const data = await response.json();
+                if (data.role !== 'admin') {
+                    updateAuthDebugBadge(data.username || '-');
+                    window.location.href = '/explorer';
+                    return;
+                }
+                currentUser = data.username;
+                updateAuthDebugBadge(currentUser);
+                _authReady = true;
+                startUptimeTicker();
+                await loadInitialData();
+                startPeriodicRefresh();
+            } catch (error) {
+                updateAuthDebugBadge('-');
+                window.location.href = '/login?next=' + encodeURIComponent('/admin');
+            }
+        }
+
+        // ==================== 仪表盘实时轮询（替代 SSE，Cookie 自动携带，永远可靠）====================
+
+        let dashboardTimer = null;
+
+        function startDashboardPolling() {
+            if (dashboardTimer) return;
+            dashboardTimer = setInterval(async () => {
+                if (!_authReady) return;
+                try {
+                    const resp = await adminFetch('/api/stream');
+                    if (!resp.ok) return;
+                    const data = await resp.json();
+                    if (data.error) return;
+                    if (data.connections !== undefined)
+                        document.getElementById('activeConnections').textContent = data.connections;
+                    if (data.online_count !== undefined)
+                        document.getElementById('onlineCount').textContent = data.online_count + '人';
+                    updateCharts(data);
+                } catch (error) {
+                    // 静默忽略网络抖动，不闪烁状态灯
+                }
+            }, 1500);
+        }
+
+        function updateConnectionStatus(connected) {
+            const indicator = document.getElementById('serverRunningIndicator');
+            const connText = document.getElementById('connectionStatusText');
+            if (!indicator || !connText) return;
+            if (connected) {
+                indicator.className = 'w-3 h-3 bg-green-500 rounded-full';
+                connText.textContent = '已连接';
+                connText.className = 'text-xs text-green-500';
+            } else {
+                indicator.className = 'w-3 h-3 bg-red-500 rounded-full';
+                connText.textContent = '连接中断';
+                connText.className = 'text-xs text-red-500';
+            }
+        }
+
+        // ==================== 数据加载 ====================
+
+        async function loadDbStatus() {
+            const badge = document.getElementById('dbStatusBadge');
+            if (!badge) return;
+            try {
+                const resp = await adminFetch('/api/system/db');
+                if (!resp.ok) {
+                    badge.className = 'text-xs px-2 py-1 rounded bg-yellow-100 text-yellow-700';
+                    badge.textContent = 'DB: 未知';
+                    return;
+                }
+                const data = await resp.json();
+                if (data.is_mysql) {
+                    badge.className = 'text-xs px-2 py-1 rounded bg-green-100 text-green-700';
+                    badge.textContent = 'DB: MySQL';
+                } else {
+                    badge.className = 'text-xs px-2 py-1 rounded bg-red-100 text-red-700';
+                    badge.textContent = 'DB: SQLite';
+                }
+                badge.title = data.database_uri || '';
+            } catch (e) {
+                badge.className = 'text-xs px-2 py-1 rounded bg-yellow-100 text-yellow-700';
+                badge.textContent = 'DB: 检测失败';
+            }
+        }
+
+        async function logout() {
+            try {
+                await fetch('/api/auth/logout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Auth-Scope': 'admin' },
+                    body: JSON.stringify({ scope: 'admin' })
+                });
+            } catch (error) {}
+            updateAuthDebugBadge('-');
+            window.location.href = '/login?next=' + encodeURIComponent('/admin');
+        }
+
+        // ==================== 页面导航 ====================
+
+        // ==================== 图表初始化 ====================
+
+        function initCharts() {
+            const ctx1 = document.getElementById('connectionChart').getContext('2d');
+            connectionChart = new Chart(ctx1, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: '活跃连接数',
+                        data: [],
+                        borderColor: '#3B82F6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+
+            const ctx2 = document.getElementById('diskChart').getContext('2d');
+            diskChart = new Chart(ctx2, {
+                type: 'doughnut',
+                data: {
+                    labels: ['已用空间', '可用空间'],
+                    datasets: [{
+                        // 初始占位，loadInitialData 会立即更新为真实数据
+                        data: [0, 100],
+                        backgroundColor: ['#3B82F6', '#E5E7EB']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+        }
+
+        // ==================== 数据刷新（WebSocket 实时 + HTTP 初始加载）====================
+
+        async function loadInitialData() {
+            let attempts = 0;
+            const maxAttempts = 3;
+            while (attempts < maxAttempts) {
+                attempts++;
+                try {
+                    const [statusResponse, overviewResponse] = await Promise.all([
+                        adminFetch('/api/status'),
+                        adminFetch('/api/admin/overview')
+                    ]);
+
+                    if (statusResponse.status === 401 || overviewResponse.status === 401) {
+                        // session 可能刚设置未生效，稍等重试
+                        if (attempts < maxAttempts) {
+                            await new Promise(r => setTimeout(r, 500));
+                            continue;
+                        }
+                        return;
+                    }
+
+                    const statusData = await statusResponse.json();
+                    const overviewData = overviewResponse.ok ? await overviewResponse.json() : null;
+                    updateDashboard(statusData, overviewData);
+                    // 初始加载完成后才启动轮询，避免轮询和初始加载竞争
+                    updateConnectionStatus(true);
+                    startDashboardPolling();
+                    dashboardLoaded = true;
+                    return;
+                } catch (error) {
+                    if (attempts >= maxAttempts) {
+                        console.error('初始加载数据失败:', error);
+                    }
+                }
+            }
+        }
+
+        function updateDashboard(statusData, overviewData) {
+            const merged = {
+                ...(statusData || {}),
+                ...(overviewData || {}),
+                disk: (overviewData && overviewData.disk) || statusData?.disk || { percent: 0 }
+            };
+            updateDashboardRealtime(merged);
+        }
+
+        async function refreshData() {
+            // 每 5 秒主动轮询：更新概览数据（用户数/在线/磁盘/日志）
+            try {
+                const overviewResp = await adminFetch('/api/admin/overview');
+                if (!overviewResp.ok) return;
+                const overviewData = await overviewResp.json();
+                updateDashboardRealtime(overviewData);
+            } catch (error) {
+                console.error('轮询概览数据失败:', error);
+            }
+        }
+
+        function updateDashboardRealtime(statusData) {
+            // SSE 实时推送的数据更新（无间隔，即时显示）
+            
+            // 更新总用户数
+            if (statusData.total_users !== undefined) {
+                document.getElementById('totalUsers').textContent = statusData.total_users;
+            }
+            
+            // 更新活跃连接数
+            if (statusData.connections !== undefined) {
+                document.getElementById('activeConnections').textContent = statusData.connections;
+            }
+            
+            // 更新在线人数标签
+            if (statusData.online_count !== undefined) {
+                document.getElementById('onlineCount').textContent = statusData.online_count + '人';
+            }
+            
+            // 更新在线用户列表
+            if (statusData.online_users !== undefined) {
+                updateOnlineUsers(statusData.online_users);
+            }
+            
+            // 更新最近活动
+            if (statusData.recent_logins !== undefined) {
+                updateRecentActivity(statusData.recent_logins);
+            }
+            
+            // 更新磁盘使用 TOP5
+            if (statusData.top_users_by_usage !== undefined) {
+                updateTopUsersUsage(statusData.top_users_by_usage);
+            }
+            
+            // 更新数据传输量
+            if (statusData.totalBytesTransferred !== undefined) {
+                document.getElementById('dataTransferred').textContent = 
+                    ((statusData.totalBytesTransferred || 0) / 1024).toFixed(1) + ' KB';
+            }
+            
+            // 更新运行时间（本地计时器独立运行，SSE 不重置）
+            // （计时器已在 startUptimeTicker 中独立每秒+1，SSE 数据只作参考不覆盖）
+            // 更新服务器状态：只通过 /api/status 更新（loadInitialData 路径），轮询不覆盖
+            if (statusData.is_running !== undefined) {
+                updateServerStatus(statusData.is_running);
+            }
+            // （refreshData 调用本函数时会顺便更新图表，而 SSE 也更新，所以这里不再重复）
+
+            // 关闭高频日志，避免控制台刷屏影响调试与页面流畅度
+        }
+
+        function startUptimeTicker() {
+            if (uptimeTimer) return;
+            // 启动本地秒级计时器（不依赖 SSE 推送，SSE 来之前就启动）
+            uptimeSeconds += 1;
+            const h = Math.floor(uptimeSeconds / 3600);
+            const m = Math.floor((uptimeSeconds % 3600) / 60);
+            const s = uptimeSeconds % 60;
+            document.getElementById('uptime').textContent = `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+            uptimeTimer = setInterval(() => {
+                uptimeSeconds += 1;
+                const h = Math.floor(uptimeSeconds / 3600);
+                const m = Math.floor((uptimeSeconds % 3600) / 60);
+                const s = uptimeSeconds % 60;
+                document.getElementById('uptime').textContent = `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+            }, 1000);
+        }
+
+        function updateOnlineUsers(onlineUsers) {
+            const container = document.getElementById('onlineUsersList');
+            if (!onlineUsers || onlineUsers.length === 0) {
+                container.innerHTML = `
+                    <div class="flex items-center space-x-3 text-gray-500 text-sm">
+                        <i class="fas fa-user-slash text-gray-400"></i>
+                        <span>暂无在线用户</span>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = onlineUsers.map(user => `
+                <div class="flex items-center justify-between p-2 bg-green-50 rounded-lg">
+                    <div class="flex items-center space-x-2">
+                        <i class="fas fa-user-circle text-green-600"></i>
+                        <span class="text-sm font-medium text-gray-700">${user.username}</span>
+                    </div>
+                    <span class="text-xs text-gray-500">${user.ip}</span>
+                </div>
+            `).join('');
+        }
+
+        function updateRecentActivity(logins) {
+            const container = document.getElementById('recentActivity');
+            if (!logins || logins.length === 0) {
+                container.innerHTML = `
+                    <div class="flex items-center space-x-3 text-gray-500 text-sm">
+                        <i class="fas fa-inbox text-gray-400"></i>
+                        <span>暂无活动记录</span>
+                    </div>
+                `;
+                return;
+            }
+
+            const actionIcons = {
+                'login': 'fa-sign-in-alt text-green-600',
+                'logout': 'fa-sign-out-alt text-blue-600',
+                'upload': 'fa-cloud-upload-alt text-purple-600',
+                'download': 'fa-download text-orange-600',
+                'delete': 'fa-trash text-red-600'
+            };
+
+            container.innerHTML = logins.map(log => {
+                const iconClass = actionIcons[log.action] || 'fa-circle text-gray-400';
+                const time = new Date(log.created_at).toLocaleString('zh-CN');
+                return `
+                    <div class="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded-lg transition-colors">
+                        <i class="fas ${iconClass} text-sm"></i>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-medium text-gray-700 truncate">${log.username}</p>
+                            <p class="text-xs text-gray-500">${log.action} · ${time}</p>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateTopUsersUsage(topUsers) {
+            const container = document.getElementById('topUsersUsage');
+            if (!topUsers || topUsers.length === 0) {
+                container.innerHTML = `
+                    <div class="flex items-center space-x-3 text-gray-500 text-sm">
+                        <i class="fas fa-chart-pie text-gray-400"></i>
+                        <span>暂无配额使用数据</span>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = topUsers.map((user, index) => {
+                const usagePercent = user.usage_percent || 0;
+                const barColor = usagePercent > 90 ? 'bg-red-500' : usagePercent > 70 ? 'bg-yellow-500' : 'bg-green-500';
+                return `
+                    <div class="flex items-center space-x-3">
+                        <span class="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center text-xs font-bold text-gray-600">${index + 1}</span>
+                        <div class="flex-1">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-sm font-medium text-gray-700">${user.username}</span>
+                                <span class="text-xs text-gray-500">${usagePercent}%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div class="${barColor} h-2 rounded-full transition-all" style="width: ${usagePercent}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function showRefreshError() {
+            const indicator = document.getElementById('serverRunningIndicator');
+            if (!indicator) return;
+            indicator.className = 'w-3 h-3 bg-yellow-500 rounded-full';
+            setTimeout(() => {
+                if (indicator) {
+                    indicator.className = 'w-3 h-3 bg-red-500 rounded-full';
+                }
+            }, 2000);
+        }
+
+        function updateServerStatus(isRunning) {
+            const indicator = document.getElementById('serverRunningIndicator');
+            const text = document.getElementById('serverRunningText');
+            const controlIndicator = document.getElementById('serverControlIndicator');
+            const controlStatus = document.getElementById('serverControlStatus');
+            
+            if (!indicator) return;
+            
+            if (isRunning) {
+                indicator.className = 'w-3 h-3 bg-green-500 rounded-full';
+                text.textContent = '运行中';
+                text.className = 'text-sm text-green-600';
+                if (controlIndicator) controlIndicator.className = 'w-4 h-4 bg-green-500 rounded-full';
+                if (controlStatus) controlStatus.textContent = '正在运行';
+            } else {
+                indicator.className = 'w-3 h-3 bg-red-500 rounded-full';
+                text.textContent = '已停止';
+                text.className = 'text-sm text-red-600';
+                if (controlIndicator) controlIndicator.className = 'w-4 h-4 bg-red-500 rounded-full';
+                if (controlStatus) controlStatus.textContent = '已停止';
+            }
+        }
+
+        function updateCharts(data) {
+            // 更新连接趋势图
+            const now = new Date();
+            const timeLabel = now.getHours() + ':' + String(now.getMinutes()).padStart(2, '0');
+            
+            if (connectionChart.data.labels.length > 10) {
+                connectionChart.data.labels.shift();
+                connectionChart.data.datasets[0].data.shift();
+            }
+            connectionChart.data.labels.push(timeLabel);
+            connectionChart.data.datasets[0].data.push(data.connections || 0);
+            connectionChart.update();
+
+            // 更新磁盘使用图
+            const diskPercent = data?.disk?.percent ?? data?.diskPercent;
+            if (diskChart && diskPercent !== undefined) {
+                diskChart.data.datasets[0].data = [diskPercent, 100 - diskPercent];
+                diskChart.update();
+            }
+        }
+
+        // ==================== 用户管理 ====================
+
+        async function loadUsers() {
+            const tbody = document.getElementById('usersTableBody');
+            tbody.innerHTML = '<tr><td colspan="8" class="px-6 py-8 text-center text-gray-500">加载中...</td></tr>';
+            
+            try {
+                const response = await adminFetch('/api/admin/users');
+                if (!response.ok) throw new Error('获取用户列表失败');
+                const data = await response.json();
+                
+                renderUsersTable(data.users || []);
+                document.getElementById('totalUsers').textContent = (data.users || []).length;
+            } catch (error) {
+                tbody.innerHTML = '<tr><td colspan="8" class="px-6 py-8 text-center text-red-500">加载失败</td></tr>';
+            }
+        }
+
+        function renderUsersTable(users) {
+            const tbody = document.getElementById('usersTableBody');
+            tbody.innerHTML = '';
+            
+            users.forEach(user => {
+                const row = document.createElement('tr');
+                row.className = 'table-row transition-all';
+                
+                // 处理配额显示
+                const quotaDisplay = user.quota_bytes && user.quota_bytes > 0 
+                    ? Math.floor(user.quota_bytes / 1024 / 1024) + ' MB' 
+                    : '无限制';
+                
+                // 处理状态显示（使用 enabled 字段）
+                const isEnabled = user.enabled !== false;
+                const statusClass = isEnabled ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700';
+                const statusText = isEnabled ? '正常' : '禁用';
+                
+                row.innerHTML = `
+                    <td class="px-6 py-4">
+                        <div class="flex items-center">
+                            <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3">
+                                <i class="fas fa-user text-blue-600 text-sm"></i>
+                            </div>
+                            <div>
+                                <p class="font-medium text-gray-800">${user.username}</p>
+                                <p class="text-xs text-gray-500">${user.home_dir || './ftp_root/' + user.username}</p>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4">
+                        <span class="px-2 py-1 ${user.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'} rounded-full text-xs font-medium">
+                            ${user.role || 'user'}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 text-gray-600 text-sm">${user.home_dir || './ftp_root/' + user.username}</td>
+                    <td class="px-6 py-4">
+                        <span class="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs font-mono">elradfmw</span>
+                    </td>
+                    <td class="px-6 py-4 text-gray-600 text-sm">
+                        ${quotaDisplay}
+                    </td>
+                    <td class="px-6 py-4 text-gray-600 text-sm">
+                        无限制
+                    </td>
+                    <td class="px-6 py-4">
+                        <span class="px-2 py-1 ${statusClass} rounded-full text-xs font-medium">
+                            ${statusText}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="flex space-x-2">
+                            <button onclick="editUser(${user.id})" class="text-blue-600 hover:text-blue-700" title="编辑">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            ${user.username !== 'admin' ? `
+                            <button onclick="deleteUser(${user.id}, '${user.username}')" class="text-red-600 hover:text-red-700" title="删除">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                            ` : ''}
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // ==================== 模态框控制 ====================
+
+        function showAddUserModal() {
+            document.getElementById('addUserModal').classList.remove('hidden');
+            document.getElementById('addUserModal').classList.add('flex');
+        }
+
+        function closeAddUserModal() {
+            document.getElementById('addUserModal').classList.add('hidden');
+            document.getElementById('addUserModal').classList.remove('flex');
+            document.getElementById('addUserForm').reset();
+        }
+
+        async function submitAddUser() {
+            const userData = {
+                username: document.getElementById('newUsername').value,
+                password: document.getElementById('newPassword').value,
+                home_dir: document.getElementById('newHomeDir').value,
+                permissions: document.getElementById('newPermissions').value,
+                quota_bytes: parseInt(document.getElementById('newQuota').value) * 1024 * 1024,
+                speed_limit_kbps: parseInt(document.getElementById('newSpeedLimit').value)
+            };
+            
+            try {
+                const response = await adminFetch('/api/admin/users', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Auth-Scope': 'admin' },
+                    body: JSON.stringify(userData)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showToast('用户添加成功', 'success');
+                    closeAddUserModal();
+                    loadUsers();
+                } else {
+                    showToast(result.error || '添加失败', 'error');
+                }
+            } catch (error) {
+                showToast('添加失败：' + error.message, 'error');
+            }
+        }
+
+        // ==================== 编辑用户功能 ====================
+        
+        let editingUserId = null;
+        
+        function editUser(userId) {
+            const usersTableBody = document.getElementById('usersTableBody');
+            const rows = usersTableBody.querySelectorAll('tr');
+            let userData = null;
+            
+            // 从表格行中提取用户数据
+            rows.forEach(row => {
+                const editBtn = row.querySelector(`button[onclick="editUser(${userId})"]`);
+                if (editBtn) {
+                    const usernameEl = row.querySelector('.font-medium.text-gray-800');
+                    const homeDirEl = row.querySelector('.text-xs.text-gray-500');
+                    const roleEl = row.querySelector('.rounded-full.text-xs.font-medium');
+                    const quotaEl = row.querySelectorAll('td')[4];
+                    const statusEl = row.querySelectorAll('td')[6];
+                    
+                    userData = {
+                        id: userId,
+                        username: usernameEl ? usernameEl.textContent.trim() : '',
+                        home_dir: homeDirEl ? homeDirEl.textContent.trim() : '',
+                        role: roleEl ? roleEl.textContent.trim() : 'user',
+                        quota_bytes: quotaEl ? quotaEl.textContent.trim() : '0',
+                        enabled: statusEl && !statusEl.textContent.includes('禁用')
+                    };
+                }
+            });
+            
+            if (!userData) {
+                // 如果从表格找不到，重新从 API 获取
+                adminFetch('/api/admin/users')
+                    .then(res => res.json())
+                    .then(data => {
+                        const user = (data.users || []).find(u => u.id === userId);
+                        if (user) showEditUserModal(user);
+                    });
+                return;
+            }
+            
+            showEditUserModal(userData);
+        }
+        
+        function showEditUserModal(userData) {
+            editingUserId = userData.id;
+            
+            // 创建或复用编辑模态框
+            let modal = document.getElementById('editUserModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'editUserModal';
+                modal.className = 'fixed inset-0 modal-overlay hidden items-center justify-center z-50';
+                modal.innerHTML = `
+                    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4">
+                        <div class="p-6 border-b border-gray-200">
+                            <h3 class="text-xl font-bold text-gray-800">编辑用户</h3>
+                        </div>
+                        <form id="editUserForm" class="p-6 space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">用户名</label>
+                                <input type="text" id="editUsername" disabled
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-100 text-gray-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">新密码（留空则不变）</label>
+                                <input type="password" id="editPassword"
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    placeholder="输入新密码或留空">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">角色</label>
+                                <select id="editRole" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                    <option value="user">普通用户 (user)</option>
+                                    <option value="admin">管理员 (admin)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">主目录</label>
+                                <input type="text" id="editHomeDir" required
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">存储配额 (MB, 0=无限制)</label>
+                                <input type="number" id="editQuota" value="0" min="0"
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">状态</label>
+                                <select id="editEnabled" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                    <option value="true">正常</option>
+                                    <option value="false">禁用</option>
+                                </select>
+                            </div>
+                        </form>
+                        <div class="p-6 border-t border-gray-200 flex justify-end space-x-3">
+                            <button onclick="closeEditUserModal()" class="px-6 py-2 text-gray-600 hover:text-gray-800 transition-all">取消</button>
+                            <button onclick="submitEditUser()" class="btn-primary text-white px-6 py-2 rounded-lg transition-all">保存</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+            }
+            
+            // 填充数据
+            document.getElementById('editUsername').value = userData.username;
+            document.getElementById('editPassword').value = '';
+            document.getElementById('editRole').value = userData.role || 'user';
+            document.getElementById('editHomeDir').value = userData.home_dir || './ftp_root/' + userData.username;
+            
+            // 解析配额
+            let quotaValue = 0;
+            if (typeof userData.quota_bytes === 'number') {
+                quotaValue = Math.floor(userData.quota_bytes / 1024 / 1024);
+            } else if (typeof userData.quota_bytes === 'string' && userData.quota_bytes !== '无限制') {
+                quotaValue = parseInt(userData.quota_bytes) || 0;
+            }
+            document.getElementById('editQuota').value = quotaValue;
+            
+            document.getElementById('editEnabled').value = userData.enabled !== false ? 'true' : 'false';
+            
+            // 显示模态框
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+        
+        function closeEditUserModal() {
+            const modal = document.getElementById('editUserModal');
+            if (modal) {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }
+            editingUserId = null;
+        }
+        
+        async function submitEditUser() {
+            if (!editingUserId) {
+                showToast('错误：未指定用户 ID', 'error');
+                return;
+            }
+            
+            const quotaValue = parseInt(document.getElementById('editQuota').value) || 0;
+            const updateData = {
+                role: document.getElementById('editRole').value,
+                home_dir: document.getElementById('editHomeDir').value.trim(),
+                quota_bytes: quotaValue * 1024 * 1024,
+                enabled: document.getElementById('editEnabled').value === 'true'
+            };
+            
+            const password = document.getElementById('editPassword').value.trim();
+            if (password && password.length > 0) {
+                updateData.password = password;
+            }
+            
+            console.log('更新用户数据:', editingUserId, updateData);
+            
+            try {
+                const response = await adminFetch(`/api/admin/users/${editingUserId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', 'X-Auth-Scope': 'admin' },
+                    body: JSON.stringify(updateData)
+                });
+                
+                const result = await response.json();
+                console.log('服务器响应:', response.status, result);
+                
+                if (response.ok) {
+                    showToast('用户信息已更新', 'success');
+                    closeEditUserModal();
+                    loadUsers();
+                } else {
+                    showToast(result.error || '更新失败', 'error');
+                }
+            } catch (error) {
+                console.error('更新错误:', error);
+                showToast('更新失败：' + error.message, 'error');
+            }
+        }
+
+        async function deleteUser(userId, username) {
+            if (!confirm(`确定要删除用户 "${username}" 吗？`)) return;
+            
+            try {
+                const response = await adminFetch(`/api/admin/users/${userId}`, { method: 'DELETE', headers: { 'X-Auth-Scope': 'admin' } });
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showToast('用户删除成功', 'success');
+                    loadUsers();
+                } else {
+                    showToast(result.error || '删除失败', 'error');
+                }
+            } catch (error) {
+                showToast('删除失败：' + error.message, 'error');
+            }
+        }
+
+        // ==================== 服务器控制 ====================
+
+        function loadServerConfig() {
+            adminFetch('/api/server/config')
+                .then(res => res.json())
+                .then(config => {
+                    document.getElementById('configAddress').value = config.address || '0.0.0.0';
+                    document.getElementById('configPort').value = config.port || 2121;
+                    document.getElementById('configMaxConnections').value = config.max_connections || 256;
+                    document.getElementById('configTimeout').value = config.timeout || 300;
+                    document.getElementById('configBanner').value = config.banner || 'Welcome';
+                })
+                .catch(() => {});
+        }
+
+        function saveConfig() {
+            const config = {
+                address: document.getElementById('configAddress').value,
+                port: parseInt(document.getElementById('configPort').value),
+                max_connections: parseInt(document.getElementById('configMaxConnections').value),
+                timeout: parseInt(document.getElementById('configTimeout').value),
+                banner: document.getElementById('configBanner').value
+            };
+            
+            adminFetch('/api/server/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Auth-Scope': 'admin' },
+                body: JSON.stringify(config)
+            })
+            .then(res => res.json())
+            .then(data => {
+                showToast(data.message || '配置已保存', 'success');
+            })
+            .catch(() => showToast('保存失败', 'error'));
+        }
+
+        async function startServer() {
+            try {
+                const response = await adminFetch('/api/server/start', { method: 'POST', headers: { 'X-Auth-Scope': 'admin' } });
+                const result = await response.json();
+                showToast(response.ok ? '服务器启动成功' : result.error, response.ok ? 'success' : 'error');
+                setTimeout(refreshData, 1000);
+            } catch (error) {
+                showToast('启动失败', 'error');
+            }
+        }
+
+        async function stopServer() {
+            try {
+                const response = await adminFetch('/api/server/stop', { method: 'POST', headers: { 'X-Auth-Scope': 'admin' } });
+                const result = await response.json();
+                showToast(response.ok ? '服务器已停止' : result.error, response.ok ? 'success' : 'error');
+                setTimeout(refreshData, 1000);
+            } catch (error) {
+                showToast('停止失败', 'error');
+            }
+        }
+
+        async function restartServer() {
+            showToast('服务器重启中...', 'info');
+            await stopServer();
+            setTimeout(() => startServer(), 1500);
+        }
+
+        // ==================== 日志管理 ====================
+
+        async function refreshLogs() {
+            const terminal = document.getElementById('logsTerminal');
+            terminal.textContent = '[系统] 加载日志中...';
+            const filter = document.getElementById('logFilter').value;
+            
+            try {
+                const response = await adminFetch(`/api/admin/logs?username=${encodeURIComponent(filter)}`);
+                if (!response.ok) throw new Error('获取日志失败');
+                const data = await response.json();
+                renderLogs(data.logs || []);
+                startLogsStream();
+            } catch (error) {
+                terminal.textContent = '[错误] 日志加载失败';
+            }
+        }
+
+        function renderLogs(logs) {
+            const terminal = document.getElementById('logsTerminal');
+            const keyword = (document.getElementById('logFilter')?.value || '').trim().toLowerCase();
+            const filteredLogs = (logs || []).filter(log => {
+                if (!keyword) return true;
+                const hay = `${log.username || ''} ${log.action || ''} ${log.file_path || ''} ${log.ip_address || ''}`.toLowerCase();
+                return hay.includes(keyword);
+            });
+            const lines = filteredLogs.map(log => {
+                const t = log.created_at ? new Date(log.created_at).toLocaleString('zh-CN') : '-';
+                return `[${t}] [${log.username || '-'}] [${log.action || '-'}] ${log.file_path || ''} (${log.ip_address || '-'})`;
+            });
+            terminal.textContent = lines.length ? lines.join('\n') : '[系统] 暂无日志';
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        function startLogsStream() {
+            if (logsEventSource) return;
+            logsEventSource = new EventSource('/api/admin/logs/stream');
+            logsEventSource.onmessage = (event) => {
+                try {
+                    const payload = JSON.parse(event.data || '{}');
+                    if (payload.logs) renderLogs(payload.logs);
+                } catch (error) {}
+            };
+            logsEventSource.onerror = () => {
+                // 不自动重连（页面切换时会清理），避免重连风暴
+                if (logsEventSource) {
+                    logsEventSource.close();
+                    logsEventSource = null;
+                }
+            };
+        }
+
+        // ==================== Toast 通知 ====================
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toastMessage');
+            const toastIcon = document.getElementById('toastIcon');
+            
+            const icons = {
+                success: 'fa-check-circle text-green-500',
+                error: 'fa-times-circle text-red-500',
+                info: 'fa-info-circle text-blue-500'
+            };
+            
+            toastMessage.textContent = message;
+            toastIcon.className = `fas ${icons[type]} text-xl`;
+            
+            toast.classList.remove('translate-x-full');
+            
+            setTimeout(() => {
+                toast.classList.add('translate-x-full');
+            }, 3000);
+        }
+
+        // ==================== 考试管理功能 ====================
+
+        let selectedExamFiles = [];
+        let examHistory = [];
+        let currentSelectedExamId = null;
+
+        // 从 localStorage 加载上次选择的考试 ID
+        function loadLastSelectedExam() {
+            try {
+                const saved = localStorage.getItem('lastExamId');
+                if (saved) {
+                    currentSelectedExamId = saved;
+                    console.log('📌 恢复上次选择的考试:', currentSelectedExamId);
+                }
+            } catch (e) {
+                console.warn('无法读取 localStorage:', e);
+            }
+        }
+
+        // 保存当前选择的考试 ID 到 localStorage
+        function saveSelectedExam(examId) {
+            try {
+                if (examId) {
+                    localStorage.setItem('lastExamId', examId);
+                    currentSelectedExamId = examId;
+                }
+            } catch (e) {
+                console.warn('无法保存至 localStorage:', e);
+            }
+        }
+
+        // 文件拖拽上传处理
+        document.addEventListener('DOMContentLoaded', () => {
+            const dropZone = document.getElementById('dropZone');
+            const fileInput = document.getElementById('examFile');
+
+            if (dropZone && fileInput) {
+                dropZone.addEventListener('click', () => fileInput.click());
+
+                dropZone.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    dropZone.classList.add('border-blue-500', 'bg-blue-50');
+                });
+
+                dropZone.addEventListener('dragleave', () => {
+                    dropZone.classList.remove('border-blue-500', 'bg-blue-50');
+                });
+
+                dropZone.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    dropZone.classList.remove('border-blue-500', 'bg-blue-50');
+                    const files = e.dataTransfer.files;
+                    if (files.length > 0) {
+                        fileInput.files = files;
+                        handleFileSelect(files);
+                    }
+                });
+
+                fileInput.addEventListener('change', (e) => {
+                    if (e.target.files.length > 0) {
+                        handleFileSelect(e.target.files);
+                    }
+                });
+            }
+
+            // ==================== 初始化 ====================
+            // auth_session 通过 HttpOnly Cookie 自动携带，无需额外处理
+            checkAuth();
+            loadDbStatus();
+            initCharts();
+            bindStudentsPaginationEvents();
+            loadLastSelectedExam();
+        });
+
+        function handleFileSelect(files) {
+            selectedExamFiles = Array.from(files || []).filter(Boolean);
+            const fileNameEl = document.getElementById('fileName');
+            if (fileNameEl) {
+                if (selectedExamFiles.length === 0) {
+                    fileNameEl.textContent = '';
+                    return;
+                }
+                const totalSizeKB = selectedExamFiles.reduce((sum, f) => sum + f.size, 0) / 1024;
+                if (selectedExamFiles.length === 1) {
+                    const file = selectedExamFiles[0];
+                    fileNameEl.textContent = `已选择：${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+                } else {
+                    fileNameEl.textContent = `已选择 ${selectedExamFiles.length} 个文件，总大小 ${totalSizeKB.toFixed(1)} KB`;
+                }
+            }
+        }
+
+        // 创建考生账号
+        async function createExamUsers() {
+            const examId = document.getElementById('examId').value.trim();
+            const count = parseInt(document.getElementById('studentCount').value);
+            const quotaMB = parseInt(document.getElementById('studentQuota').value);
+
+            if (!examId) {
+                showToast('请输入考试 ID', 'error');
+                return;
+            }
+
+            if (!count || count < 1 || count > 500) {
+                showToast('考生数量必须在 1-500 之间', 'error');
+                return;
+            }
+
+            const btn = event.target;
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>生成中...';
+
+            try {
+                const response = await adminFetch('/api/exam/create-users', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Auth-Scope': 'admin' },
+                    body: JSON.stringify({
+                        exam_id: examId,
+                        count: count,
+                        quota_bytes: quotaMB * 1024 * 1024
+                    })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showToast(`成功生成 ${result.count} 个 6 位数字考生账号`, 'success');
+                    // 自动更新分发试卷的考试选择
+                    updateExamSelects(examId);
+                    // 刷新考生列表
+                    loadExamStudents(examId);
+                    // 刷新考试历史
+                    loadExamHistory();
+                } else {
+                    showToast(result.error || '生成失败', 'error');
+                }
+            } catch (error) {
+                showToast('生成失败：' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        }
+
+        // 更新所有考试选择下拉框（包含三个：上传、分发、清除）
+        function updateExamSelects(selectedExamId) {
+            const selects = ['examSelect', 'examSelectDistribute', 'examSelectCleanup'];
+            selects.forEach(selectId => {
+                const select = document.getElementById(selectId);
+                if (select) {
+                    // 检查是否已存在该选项
+                    let exists = false;
+                    select.querySelectorAll('option').forEach(opt => {
+                        if (opt.value === selectedExamId) exists = true;
+                    });
+                    if (!exists) {
+                        const option = document.createElement('option');
+                        option.value = selectedExamId;
+                        option.textContent = selectedExamId;
+                        select.appendChild(option);
+                    }
+                    select.value = selectedExamId;
+                    // 保存选择状态
+                    if (selectId === 'examSelect') {
+                        saveSelectedExam(selectedExamId);
+                        // 自动加载考生列表
+                        loadExamStudents(selectedExamId);
+                        loadExamPapers(selectedExamId);
+                    }
+                }
+            });
+        }
+
+        // 上传试卷到试卷池
+        async function uploadPapersToPool() {
+            const examId = document.getElementById('examSelect').value.trim();
+
+            if (!examId) {
+                showToast('请先选择考试', 'error');
+                return;
+            }
+
+            if (!selectedExamFiles || selectedExamFiles.length === 0) {
+                showToast('请选择试卷文件', 'error');
+                return;
+            }
+
+            const btn = event.target;
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>上传中...';
+
+            const formData = new FormData();
+            formData.append('exam_id', examId);
+            selectedExamFiles.forEach(file => formData.append('files', file));
+
+            try {
+                const response = await adminFetch('/api/exam/upload_papers', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showToast(`成功上传 ${result.count} 份试卷到试卷池`, 'success');
+                    selectedExamFiles = [];
+                    document.getElementById('examFile').value = '';
+                    document.getElementById('fileName').textContent = '';
+                    loadExamPapers(examId);
+                } else {
+                    showToast(result.error || '上传失败', 'error');
+                }
+            } catch (error) {
+                showToast('上传失败：' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-upload mr-2"></i>上传试卷到池';
+            }
+        }
+
+        // 随机分卷
+        async function distributeExamFiles() {
+            const examId = document.getElementById('examSelectDistribute').value.trim();
+
+            if (!examId) {
+                showToast('请选择考试', 'error');
+                return;
+            }
+
+            const btn = event.target;
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>分卷中...';
+
+            try {
+                const response = await adminFetch('/api/exam/distribute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Auth-Scope': 'admin' },
+                    body: JSON.stringify({ exam_id: examId })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showToast(`成功分发到 ${result.distributed_count} 个考生目录 (${result.failed_count} 失败)`, 'success');
+                    // 刷新考生列表
+                    loadExamStudents(examId);
+                } else {
+                    showToast(result.error || '分发失败', 'error');
+                }
+            } catch (error) {
+                showToast('分发失败：' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-share-alt mr-2"></i>开始随机分卷';
+            }
+        }
+
+        // 清除考试数据
+        async function cleanupExam() {
+            const examId = document.getElementById('examSelectCleanup').value.trim();
+
+            if (!examId) {
+                showToast('请选择考试', 'error');
+                return;
+            }
+
+            if (!confirm(`⚠️ 确定要清除考试 "${examId}" 的所有数据吗？\n\n此操作将：\n- 删除所有考生账号\n- 删除所有考生专属目录及文件\n- 删除试卷池（除非选择保留）\n\n此操作不可恢复！`)) {
+                return;
+            }
+
+            const btn = event.target;
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>清除中...';
+
+            try {
+                const response = await adminFetch('/api/exam/cleanup', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json', 'X-Auth-Scope': 'admin' },
+                    body: JSON.stringify({ exam_id: examId, keep_papers: false })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showToast(result.message || '清除成功', 'success');
+                    // 从下拉框移除该考试
+                    removeExamFromSelects(examId);
+                    // 清空考生列表
+                    document.getElementById('studentsTableBody').innerHTML = '';
+                    document.getElementById('noStudentsState').classList.remove('hidden');
+                    // 刷新考试历史
+                    loadExamHistory();
+                } else {
+                    showToast(result.error || '清除失败', 'error');
+                }
+            } catch (error) {
+                showToast('清除失败：' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-exclamation-triangle mr-2"></i>一键清场';
+            }
+        }
+
+        // 从所有下拉框移除考试
+        function removeExamFromSelects(examId) {
+            const selects = ['examSelect', 'examSelectDistribute', 'examSelectCleanup'];
+            selects.forEach(selectId => {
+                const select = document.getElementById(selectId);
+                if (select) {
+                    select.querySelectorAll('option').forEach(opt => {
+                        if (opt.value === examId) opt.remove();
+                    });
+                }
+            });
+            const papersList = document.getElementById('examPapersList');
+            if (papersList) {
+                papersList.innerHTML = '<div class="text-gray-400">请选择考试以查看试卷池</div>';
+            }
+        }
+
+        // 加载考试历史（使用新的 /api/exam/list 接口）
+        async function loadExamHistory() {
+            try {
+                const response = await adminFetch('/api/exam/list');
+                const result = await response.json();
+
+                if (response.ok && result.exams) {
+                    examHistory = result.exams;
+                    console.log('📋 加载考试列表成功，共', result.count, '个考试');
+                    updateExamSelectsFromHistory();
+                } else {
+                    console.warn('⚠️ 考试列表为空或响应异常');
+                }
+            } catch (error) {
+                console.error('❌ 加载考试历史失败:', error);
+            }
+        }
+
+        // 根据历史记录更新所有下拉框
+        function updateExamSelectsFromHistory() {
+            const selects = [
+                { id: 'examSelect', onChange: handleExamSelectChange },
+                { id: 'examSelectDistribute', onChange: handleExamSelectDistributeChange },
+                { id: 'examSelectCleanup', onChange: null }
+            ];
+
+            selects.forEach(({ id, onChange }) => {
+                const select = document.getElementById(id);
+                if (select) {
+                    // 保留第一个选项（"-- 选择考试 --"）
+                    const firstOption = select.querySelector('option[value=""]');
+                    select.innerHTML = '';
+                    if (firstOption) select.appendChild(firstOption);
+
+                    examHistory.forEach(exam => {
+                        const option = document.createElement('option');
+                        option.value = exam.exam_id;
+                        option.textContent = `${exam.exam_id} (${exam.student_count}人)`;
+                        select.appendChild(option);
+                    });
+
+                    // 添加 change 事件监听
+                    if (onChange) {
+                        select.onchange = (e) => onChange(e.target.value);
+                    }
+
+                    // 如果有上次选择的考试，自动选中
+                    if (id === 'examSelect' && currentSelectedExamId) {
+                        // 检查该考试是否仍在列表中
+                        const stillExists = examHistory.some(e => e.exam_id === currentSelectedExamId);
+                        if (stillExists) {
+                            select.value = currentSelectedExamId;
+                            console.log('✅ 自动选中考试:', currentSelectedExamId);
+                            // 延迟加载考生列表
+                            setTimeout(() => {
+                                loadExamStudents(currentSelectedExamId);
+                                loadExamPapers(currentSelectedExamId);
+                            }, 100);
+                        } else {
+                            currentSelectedExamId = null;
+                            localStorage.removeItem('lastExamId');
+                        }
+                    }
+                }
+            });
+        }
+
+        // 处理上传试卷的考试选择变化
+        function handleExamSelectChange(examId) {
+            if (examId) {
+                console.log('📋 选择考试（上传）:', examId);
+                saveSelectedExam(examId);
+                loadExamStudents(examId);
+                loadExamPapers(examId);
+            } else {
+                currentSelectedExamId = null;
+                localStorage.removeItem('lastExamId');
+                document.getElementById('examPapersList').innerHTML = '<div class="text-gray-400">请选择考试以查看试卷池</div>';
+            }
+        }
+
+        // 处理分卷的考试选择变化
+        function handleExamSelectDistributeChange(examId) {
+            if (examId) {
+                console.log('📋 选择考试（分卷）:', examId);
+                loadExamStudents(examId);
+            } else {
+                document.getElementById('studentsTableBody').innerHTML = '';
+                document.getElementById('noStudentsState').classList.remove('hidden');
+                document.getElementById('studentsPagination').classList.add('hidden');
+            }
+        }
+
+        function bindStudentsPaginationEvents() {
+            const prevBtn = document.getElementById('studentsPrevBtn');
+            const nextBtn = document.getElementById('studentsNextBtn');
+            if (!prevBtn || !nextBtn) return;
+
+            prevBtn.onclick = () => {
+                if (examStudentsPage > 1) {
+                    examStudentsPage -= 1;
+                    renderExamStudentsPage();
+                }
+            };
+            nextBtn.onclick = () => {
+                const totalPages = Math.max(1, Math.ceil(examStudentsCache.length / examStudentsPageSize));
+                if (examStudentsPage < totalPages) {
+                    examStudentsPage += 1;
+                    renderExamStudentsPage();
+                }
+            };
+        }
+
+        function renderExamStudentsPage() {
+            const tbody = document.getElementById('studentsTableBody');
+            const noState = document.getElementById('noStudentsState');
+            const pagination = document.getElementById('studentsPagination');
+            const pageInfo = document.getElementById('studentsPageInfo');
+            const prevBtn = document.getElementById('studentsPrevBtn');
+            const nextBtn = document.getElementById('studentsNextBtn');
+
+            if (!examStudentsCache || examStudentsCache.length === 0) {
+                tbody.innerHTML = '';
+                noState.classList.remove('hidden');
+                pagination.classList.add('hidden');
+                return;
+            }
+
+            const total = examStudentsCache.length;
+            const totalPages = Math.max(1, Math.ceil(total / examStudentsPageSize));
+            if (examStudentsPage > totalPages) examStudentsPage = totalPages;
+
+            const startIndex = (examStudentsPage - 1) * examStudentsPageSize;
+            const pageItems = examStudentsCache.slice(startIndex, startIndex + examStudentsPageSize);
+
+            tbody.innerHTML = pageItems.map(student => {
+                const statusClass = student.enabled ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700';
+                const statusText = student.enabled ? '正常' : '禁用';
+                const quotaDisplay = student.quota_bytes > 0
+                    ? Math.floor(student.quota_bytes / 1024 / 1024) + ' MB'
+                    : '无限制';
+                const usedDisplay = (student.used_bytes / 1024 / 1024).toFixed(2) + ' MB';
+                return `
+                    <tr class="hover:bg-gray-50 transition-all">
+                        <td class="px-4 py-3">
+                            <div class="flex items-center">
+                                <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3">
+                                    <i class="fas fa-user text-blue-600 text-sm"></i>
+                                </div>
+                                <span class="font-medium text-gray-800">${student.username}</span>
+                            </div>
+                        </td>
+                        <td class="px-4 py-3 text-gray-600 text-sm">
+                            <span class="bg-gray-100 px-2 py-1 rounded text-xs font-mono select-all">******</span>
+                        </td>
+                        <td class="px-4 py-3 text-gray-600 text-sm">${student.home_dir || '-'}</td>
+                        <td class="px-4 py-3 text-gray-600 text-sm">${quotaDisplay}</td>
+                        <td class="px-4 py-3 text-gray-600 text-sm">${usedDisplay}</td>
+                        <td class="px-4 py-3">
+                            <span class="${statusClass} px-2 py-1 rounded-full text-xs font-medium">${statusText}</span>
+                        </td>
+                        <td class="px-4 py-3">
+                            <button onclick="deleteSingleStudent(${student.id}, '${student.username}')"
+                                class="text-red-600 hover:text-red-700 transition-colors" title="删除考生">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            noState.classList.add('hidden');
+            const start = startIndex + 1;
+            const end = Math.min(startIndex + pageItems.length, total);
+            pageInfo.textContent = `第 ${examStudentsPage}/${totalPages} 页，显示 ${start}-${end} / ${total}`;
+            prevBtn.disabled = examStudentsPage <= 1;
+            nextBtn.disabled = examStudentsPage >= totalPages;
+            pagination.classList.remove('hidden');
+        }
+
+        // 加载指定考试的考生列表
+        async function loadExamStudents(examId = null) {
+            // 如果没有传入 examId，从下拉框获取
+            if (!examId) {
+                examId = document.getElementById('examSelect').value;
+            }
+
+            const tbody = document.getElementById('studentsTableBody');
+            const noState = document.getElementById('noStudentsState');
+
+            if (!examId) {
+                tbody.innerHTML = '';
+                noState.classList.remove('hidden');
+                document.getElementById('studentsPagination').classList.add('hidden');
+                return;
+            }
+
+            console.log('📥 加载考生列表 - 考试:', examId);
+
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" class="px-4 py-8 text-center text-gray-500">
+                        <i class="fas fa-circle-notch fa-spin mr-2"></i>加载中...
+                    </td>
+                </tr>
+            `;
+            noState.classList.add('hidden');
+
+            try {
+                const response = await adminFetch(`/api/exam/students/${encodeURIComponent(examId)}`);
+                const result = await response.json();
+
+                console.log('📤 考生列表响应:', result);
+
+                if (response.ok && result.students && result.students.length > 0) {
+                    examStudentsCache = result.students;
+                    examStudentsPage = 1;
+                    renderExamStudentsPage();
+                    console.log('✅ 考生列表加载成功，共', result.students.length, '人');
+                } else {
+                    examStudentsCache = [];
+                    tbody.innerHTML = '';
+                    noState.classList.remove('hidden');
+                    document.getElementById('studentsPagination').classList.add('hidden');
+                    console.log('⚠️ 该考试暂无考生');
+                }
+            } catch (error) {
+                console.error('❌ 加载考生列表失败:', error);
+                examStudentsCache = [];
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="px-4 py-8 text-center text-red-500">
+                            <i class="fas fa-exclamation-triangle mr-2"></i>加载失败：${error.message}
+                        </td>
+                    </tr>
+                `;
+                noState.classList.add('hidden');
+                document.getElementById('studentsPagination').classList.add('hidden');
+            }
+        }
+
+        // 删除单个考生
+        async function deleteSingleStudent(studentId, username) {
+            if (!confirm(`确定要删除考生 "${username}" 吗？\n\n此操作将：\n- 删除考生账号\n- 删除考生专属目录及所有文件\n\n此操作不可恢复！`)) return;
+
+            try {
+                const response = await adminFetch(`/api/exam/student/${studentId}`, {
+                    method: 'DELETE',
+                    headers: { 'X-Auth-Scope': 'admin' }
+                });
+
+                if (response.ok) {
+                    showToast(`考生 "${username}" 已删除`, 'success');
+                    // 刷新当前列表
+                    const currentExamId = document.getElementById('examSelect').value;
+                    if (currentExamId) {
+                        loadExamStudents(currentExamId);
+                    }
+                } else {
+                    const result = await response.json();
+                    showToast(result.error || '删除失败', 'error');
+                }
+            } catch (error) {
+                showToast('删除失败：' + error.message, 'error');
+            }
+        }
+
+        // 导出考生信息 CSV
+        async function exportStudentsCSV() {
+            const examId = document.getElementById('examSelect').value.trim();
+            
+            if (!examId) {
+                showToast('请先选择考试', 'error');
+                return;
+            }
+
+            try {
+                const response = await adminFetch(`/api/exam/students/${encodeURIComponent(examId)}/export`, { credentials: 'include' });
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    const contentDisposition = response.headers.get('Content-Disposition');
+                    const filename = contentDisposition 
+                        ? contentDisposition.match(/filename="?(.+)"?/)?.[1]
+                        : `${examId}_students_${new Date().getTime()}.csv`;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                    showToast('考生信息导出成功', 'success');
+                } else {
+                    const text = await response.text();
+                    let errorMsg = '导出失败';
+                    try {
+                        const data = JSON.parse(text);
+                        errorMsg = data.error || errorMsg;
+                    } catch (e) {
+                        errorMsg = text || errorMsg;
+                    }
+                    showToast(errorMsg, 'error');
+                }
+            } catch (error) {
+                showToast('导出失败：' + error.message, 'error');
+            }
+        }
+
+        // ==================== 页面导航（更新包含 exam）====================
+
+        document.querySelectorAll('.sidebar-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                const page = item.dataset.page;
+                
+                document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+                item.classList.add('active');
+                
+                document.querySelectorAll('.page-content').forEach(p => p.classList.add('hidden'));
+                if (page) {
+                    document.getElementById(page + 'Page').classList.remove('hidden');
+                    
+                    if (page === 'dashboard') refreshData();
+                    if (page === 'users') loadUsers();
+                    if (page === 'server') loadServerConfig();
+                    if (page === 'logs') refreshLogs();
+                    if (page !== 'logs' && logsEventSource) {
+                        logsEventSource.close();
+                        logsEventSource = null;
+                    }
+                    if (page === 'exam') {
+                        // 进入考试页面时再加载考试数据，减少管理台首屏压力
+                        if (!examHistoryLoaded) {
+                            examHistoryLoaded = true;
+                            loadExamHistory();
+                        }
+                    }
+                }
+            });
+        });
+
+        window.addEventListener('beforeunload', () => {
+            if (logsEventSource) {
+                logsEventSource.close();
+            }
+        });
+
+        function escapeHtml(text) {
+            return String(text || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        async function refreshCurrentExamPapers() {
+            const examId = document.getElementById('examSelect').value.trim();
+            if (!examId) {
+                showToast('请先选择考试', 'error');
+                return;
+            }
+            await loadExamPapers(examId);
+        }
+
+        async function loadExamPapers(examId) {
+            const listEl = document.getElementById('examPapersList');
+            if (!listEl) return;
+            if (!examId) {
+                listEl.innerHTML = '<div class="text-gray-400">请选择考试以查看试卷池</div>';
+                return;
+            }
+            listEl.innerHTML = '<div class="text-gray-400"><i class="fas fa-circle-notch fa-spin mr-2"></i>加载中...</div>';
+            try {
+                const response = await adminFetch(`/api/exam/papers/${encodeURIComponent(examId)}`);
+                const result = await response.json();
+                if (!response.ok) {
+                    listEl.innerHTML = `<div class="text-red-500">${escapeHtml(result.error || '加载失败')}</div>`;
+                    return;
+                }
+                const papers = result.papers || [];
+                if (papers.length === 0) {
+                    listEl.innerHTML = '<div class="text-gray-400">该考试暂无试卷</div>';
+                    return;
+                }
+                listEl.innerHTML = papers.map(paper => `
+                    <div class="flex items-center justify-between bg-gray-50 px-3 py-2 rounded">
+                        <div class="truncate pr-3" title="${escapeHtml(paper.filename)}">${escapeHtml(paper.filename)}</div>
+                        <button onclick="deleteExamPaper(${paper.id}, '${String(paper.filename).replace(/'/g, "\\'")}')" class="text-red-600 hover:text-red-700">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                `).join('');
+            } catch (error) {
+                listEl.innerHTML = `<div class="text-red-500">加载失败：${escapeHtml(error.message)}</div>`;
+            }
+        }
+
+        async function deleteExamPaper(paperId, filename) {
+            if (!confirm(`确定删除试卷 "${filename}" 吗？`)) return;
+            try {
+                const response = await adminFetch(`/api/exam/paper/${paperId}`, { method: 'DELETE', headers: { 'X-Auth-Scope': 'admin' } });
+                const result = await response.json();
+                if (!response.ok) {
+                    showToast(result.error || '删除失败', 'error');
+                    return;
+                }
+                showToast(`已删除试卷：${filename}`, 'success');
+                refreshCurrentExamPapers();
+            } catch (error) {
+                showToast(`删除失败：${error.message}`, 'error');
+            }
+        }
+
+        async function clearExamPapers() {
+            const examId = document.getElementById('examSelect').value.trim();
+            if (!examId) {
+                showToast('请先选择考试', 'error');
+                return;
+            }
+            if (!confirm(`确定清空考试 "${examId}" 的试卷池吗？`)) return;
+            try {
+                const response = await adminFetch(`/api/exam/papers/${encodeURIComponent(examId)}`, { method: 'DELETE', headers: { 'X-Auth-Scope': 'admin' } });
+                const result = await response.json();
+                if (!response.ok) {
+                    showToast(result.error || '清空失败', 'error');
+                    return;
+                }
+                showToast(`已清空 ${result.deleted_count || 0} 份试卷`, 'success');
+                loadExamPapers(examId);
+            } catch (error) {
+                showToast(`清空失败：${error.message}`, 'error');
+            }
+        }
+    </script>
+</body>
+</html>

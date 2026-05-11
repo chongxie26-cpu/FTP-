@@ -1,0 +1,1760 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>考试管理 - FTP 文件管理系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#6366F1',
+                        success: '#10B981',
+                        warning: '#F59E0B',
+                        danger: '#EF4444'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .sidebar-item:hover {
+            background: rgba(59, 130, 246, 0.1);
+        }
+        .sidebar-item.active {
+            background: rgba(59, 130, 246, 0.15);
+            border-right: 3px solid #3B82F6;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .btn-primary:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+        .modal-overlay {
+            background: rgba(0, 0, 0, 0.5);
+        }
+        .exam-card {
+            transition: all 0.3s ease;
+        }
+        .exam-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="app" class="flex">
+        <!-- Sidebar -->
+        <aside class="w-64 bg-white shadow-lg min-h-screen fixed left-0 top-0 z-50">
+            <div class="p-6 border-b border-gray-200">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 gradient-bg rounded-lg flex items-center justify-center">
+                        <i class="fas fa-graduation-cap text-white text-xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-lg font-bold text-gray-800">考试管理</h1>
+                        <p class="text-xs text-gray-500">辅助考试系统</p>
+                    </div>
+                </div>
+            </div>
+            
+            <nav class="p-4 space-y-2">
+                <a href="/admin" class="sidebar-item flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-700 transition-all cursor-pointer">
+                    <i class="fas fa-arrow-left w-5"></i>
+                    <span class="font-medium">返回管理控制台</span>
+                </a>
+                <a href="#" class="sidebar-item active flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-700 transition-all cursor-pointer" data-page="exam-create">
+                    <i class="fas fa-plus-circle w-5"></i>
+                    <span class="font-medium">创建考试</span>
+                </a>
+                <a href="#" class="sidebar-item flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-700 transition-all cursor-pointer" data-page="exam-history">
+                    <i class="fas fa-history w-5"></i>
+                    <span class="font-medium">考试历史</span>
+                </a>
+                <a href="#" class="sidebar-item flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-700 transition-all cursor-pointer" data-page="user-manage">
+                    <i class="fas fa-user-friends w-5"></i>
+                    <span class="font-medium">用户管理</span>
+                </a>
+            </nav>
+            
+            <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                            <i class="fas fa-user text-blue-600 text-sm"></i>
+                        </div>
+                        <span id="currentUsername" class="text-sm text-gray-600">管理员</span>
+                    </div>
+                    <button onclick="logout()" class="text-gray-500 hover:text-red-600" title="退出">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="ml-64 flex-1 p-8">
+            <!-- Create Exam Page -->
+            <div id="examCreatePage" class="page-content">
+                <div class="mb-8">
+                    <h2 class="text-3xl font-bold text-gray-800 mb-2">创建新考试</h2>
+                    <p class="text-gray-600">批量生成考生账号并分发试卷</p>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- 考试信息表单 -->
+                    <div class="glass-card rounded-xl p-6 shadow-md">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-6">
+                            <i class="fas fa-file-alt mr-2 text-blue-600"></i>考试信息
+                        </h3>
+                        <form id="examForm" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">考试 ID *</label>
+                                <input type="text" id="examId" required placeholder="例如：midterm2026、final_exam_a"
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                <p class="mt-1 text-xs text-gray-500">用于标识考试的唯一名称（字母、数字、下划线、连字符）</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">考试名称</label>
+                                <input type="text" id="examName" placeholder="例如：2026 年期中考试"
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                <p class="mt-1 text-xs text-gray-500">可选，用于显示的名称</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">考生数量 *</label>
+                                <input type="number" id="studentCount" required min="1" max="500" value="30"
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                <p class="mt-1 text-xs text-green-600 font-medium">✅ 自动生成 6 位纯数字考生账号</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">存储配额 (MB/人，0=无限制)</label>
+                                <input type="number" id="quotaPerStudent" value="100" min="0"
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- 试卷上传 -->
+                    <div class="glass-card rounded-xl p-6 shadow-md">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-6">
+                            <i class="fas fa-upload mr-2 text-green-600"></i>试卷文件
+                        </h3>
+                        <div class="space-y-4">
+                            <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors">
+                                <input type="file" id="examFile" accept=".zip,.pdf,.doc,.docx,.txt" 
+                                    class="hidden" onchange="handleFileSelect(this)">
+                                <label for="examFile" class="cursor-pointer">
+                                    <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-3"></i>
+                                    <p class="text-gray-600 font-medium">点击选择或拖拽文件到此处</p>
+                                    <p class="text-xs text-gray-500 mt-1">支持 ZIP（自动解压）、PDF、Word、TXT 格式</p>
+                                </label>
+                                <div id="fileInfo" class="mt-3 hidden">
+                                    <div class="inline-flex items-center space-x-2 bg-green-50 text-green-700 px-3 py-1 rounded-full text-sm">
+                                        <i class="fas fa-check-circle"></i>
+                                        <span id="fileName"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <input type="checkbox" id="overwriteExisting" class="rounded">
+                                <label for="overwriteExisting" class="text-sm text-gray-600">覆盖已存在的文件</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 操作按钮 -->
+                <div class="mt-8 glass-card rounded-xl p-6 shadow-md">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h4 class="font-semibold text-gray-800">操作步骤</h4>
+                            <p class="text-sm text-gray-500">1. 创建考试（生成 6 位数字考生账号）→ 2. 上传试卷到试卷池 → 3. 随机分卷</p>
+                        </div>
+                        <div class="flex space-x-4">
+                            <button onclick="createExam()" id="btnCreateExam"
+                                class="btn-primary text-white px-8 py-3 rounded-lg font-medium transition-all shadow-lg">
+                                <i class="fas fa-plus-circle mr-2"></i>创建考试
+                            </button>
+                            <button onclick="goToHistoryPage()" id="btnGoToHistory"
+                                class="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-lg font-medium transition-all shadow-lg">
+                                <i class="fas fa-history mr-2"></i>查看考试历史
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 生成的账号列表 -->
+                <div id="studentsResult" class="mt-6 hidden">
+                    <div class="glass-card rounded-xl p-6 shadow-md">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-semibold text-gray-800">
+                                <i class="fas fa-list mr-2 text-purple-600"></i>已创建考生账号（6 位数字）
+                            </h3>
+                            <div class="flex space-x-3">
+                                <button onclick="copyAllPasswords()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition-all">
+                                    <i class="fas fa-copy mr-2"></i>复制全部密码
+                                </button>
+                                <button onclick="downloadStudentsCSV()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition-all">
+                                    <i class="fas fa-download mr-2"></i>导出 CSV
+                                </button>
+                            </div>
+                        </div>
+                        <div class="overflow-auto max-h-96">
+                            <table class="w-full">
+                                <thead class="bg-gray-50 sticky top-0">
+                                    <tr>
+                                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">序号</th>
+                                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">考生账号</th>
+                                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">密码</th>
+                                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">工位号</th>
+                                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">状态</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="studentsTableBody" class="divide-y divide-gray-200">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Exam History Page -->
+            <div id="examHistoryPage" class="page-content hidden">
+                <div class="mb-8">
+                    <h2 class="text-3xl font-bold text-gray-800 mb-2">考试历史</h2>
+                    <p class="text-gray-600">查看和管理已创建的考试记录</p>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- 考试列表 -->
+                    <div class="lg:col-span-1">
+                        <div class="glass-card rounded-xl shadow-md overflow-hidden">
+                            <div class="p-4 bg-gray-800 text-white flex items-center justify-between">
+                                <h3 class="font-semibold"><i class="fas fa-list mr-2"></i>考试列表</h3>
+                                <button onclick="loadExamHistory()" class="hover:bg-white/20 px-2 py-1 rounded transition-colors" title="刷新">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                            </div>
+                            <div class="max-h-[600px] overflow-y-auto">
+                                <table class="w-full">
+                                    <thead class="bg-gray-50 sticky top-0">
+                                        <tr>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">考试 ID</th>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">考生数</th>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="examHistoryBody" class="divide-y divide-gray-200">
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 试卷池管理 -->
+                    <div class="lg:col-span-2">
+                        <div id="paperPoolPanel" class="glass-card rounded-xl shadow-md overflow-hidden hidden">
+                            <div class="p-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white flex items-center justify-between">
+                                <div>
+                                    <h3 class="font-semibold"><i class="fas fa-folder-open mr-2"></i>试卷池管理 - <span id="currentExamIdDisplay"></span></h3>
+                                    <p class="text-xs text-white/80 mt-1">上传试卷并管理分卷</p>
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <button onclick="exportStudentsCSV()" class="bg-white/20 hover:bg-white/30 px-3 py-1 rounded text-sm transition-colors" title="导出考生信息">
+                                        <i class="fas fa-download mr-1"></i>导出考生
+                                    </button>
+                                    <button onclick="closePaperPool()" class="hover:bg-white/20 px-3 py-1 rounded transition-colors">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="p-6">
+                                <!-- 上传区域 -->
+                                <div class="mb-6">
+                                    <div class="border-2 border-dashed border-blue-300 rounded-lg p-6 text-center hover:border-blue-500 transition-colors bg-blue-50">
+                                        <input type="file" id="paperFiles" accept=".zip,.pdf,.doc,.docx,.txt" multiple
+                                            class="hidden" onchange="handlePaperFileSelect(this)">
+                                        <label for="paperFiles" class="cursor-pointer">
+                                            <i class="fas fa-cloud-upload-alt text-4xl text-blue-400 mb-3"></i>
+                                            <p class="text-gray-700 font-medium">点击选择或拖拽文件到此处</p>
+                                            <p class="text-xs text-gray-500 mt-1">支持多文件上传，ZIP 自动解压</p>
+                                        </label>
+                                        <div id="selectedFilesInfo" class="mt-3 hidden"></div>
+                                    </div>
+                                <div class="mt-4 flex justify-end space-x-3">
+                                    <button onclick="distributePapers()" id="btnDistributePapers" disabled
+                                        class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-medium transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                                        <i class="fas fa-share-square mr-2"></i>随机分卷
+                                    </button>
+                                    <button onclick="uploadPapers()" id="btnUploadPapers" disabled
+                                        class="btn-primary text-white px-6 py-2 rounded-lg font-medium transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                                        <i class="fas fa-upload mr-2"></i>上传到试卷池
+                                    </button>
+                                </div>
+                                </div>
+
+                                <!-- 试卷列表 -->
+                                <div>
+                                    <div class="flex items-center justify-between mb-4">
+                                        <h4 class="font-semibold text-gray-800">
+                                            <i class="fas fa-file-alt mr-2 text-blue-600"></i>已上传试卷
+                                        </h4>
+                                        <button onclick="clearAllPapers()" id="btnClearAll"
+                                            class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                            disabled>
+                                            <i class="fas fa-trash-alt mr-2"></i>清空全部
+                                        </button>
+                                    </div>
+                                    <div id="papersListContainer" class="space-y-2 max-h-96 overflow-y-auto">
+                                        <div class="text-center text-gray-500 py-8">暂无试卷</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="noExamSelected" class="glass-card rounded-xl shadow-md p-12 text-center">
+                            <i class="fas fa-folder-open text-6xl text-gray-300 mb-4"></i>
+                            <p class="text-gray-500">请从左侧选择一个考试以管理试卷池</p>
+                        </div>
+
+                        <!-- 考生管理面板 -->
+                        <div id="studentsManagePanel" class="glass-card rounded-xl shadow-md overflow-hidden hidden mt-6">
+                            <div class="p-4 bg-gradient-to-r from-green-600 to-teal-600 text-white flex items-center justify-between">
+                                <div>
+                                    <h3 class="font-semibold"><i class="fas fa-users mr-2"></i>考生管理 - <span id="studentsExamIdDisplay"></span></h3>
+                                    <p class="text-xs text-white/80 mt-1">查看、删除和导出考生账户信息</p>
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <button onclick="exportStudentsCSV()" class="bg-white/20 hover:bg-white/30 px-3 py-1 rounded text-sm transition-colors" title="导出考生信息">
+                                        <i class="fas fa-download mr-1"></i>一键导出
+                                    </button>
+                                    <button onclick="clearAllStudents(currentManageExamId)" class="bg-red-600/80 hover:bg-red-600 px-3 py-1 rounded text-sm transition-colors" title="清空所有考生">
+                                        <i class="fas fa-trash-alt mr-1"></i>清空全部
+                                    </button>
+                                    <button onclick="closeStudentsManage()" class="hover:bg-white/20 px-3 py-1 rounded transition-colors">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="p-6">
+                                <div class="overflow-auto max-h-[500px]">
+                                    <table class="w-full">
+                                        <thead class="bg-gray-50 sticky top-0">
+                                            <tr>
+                                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">序号</th>
+                                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">考生账号 (6 位)</th>
+                                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">密码</th>
+                                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">工位号</th>
+                                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">分卷状态</th>
+                                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">操作</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="studentsManageTableBody" class="divide-y divide-gray-200">
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 确认清除模态框 -->
+    <div id="cleanupModal" class="fixed inset-0 modal-overlay hidden items-center justify-center z-50">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-xl font-bold text-gray-800">
+                    <i class="fas fa-exclamation-triangle text-yellow-500 mr-2"></i>确认清除
+                </h3>
+            </div>
+            <div class="p-6">
+                <p class="text-gray-700 mb-4">确定要清除考试 "<strong id="cleanupExamId"></strong>" 的所有数据吗？</p>
+                <ul class="text-sm text-gray-600 space-y-2 mb-4">
+                    <li><i class="fas fa-times text-red-500 mr-2"></i>删除所有考生账号</li>
+                    <li><i class="fas fa-times text-red-500 mr-2"></i>删除所有考生专属目录及文件</li>
+                    <li><i class="fas fa-times text-red-500 mr-2"></i>此操作不可恢复</li>
+                </ul>
+                <div class="flex items-center space-x-2">
+                    <input type="checkbox" id="confirmCleanup" class="rounded">
+                    <label for="confirmCleanup" class="text-sm text-gray-700">我已知晓后果，确认清除</label>
+                </div>
+            </div>
+            <div class="p-6 border-t border-gray-200 flex justify-end space-x-3">
+                <button onclick="closeCleanupModal()" class="px-6 py-2 text-gray-600 hover:text-gray-800 transition-all">取消</button>
+                <button onclick="confirmCleanup()" id="btnConfirmCleanup" disabled
+                    class="bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white px-6 py-2 rounded-lg transition-all">
+                    <i class="fas fa-trash mr-2"></i>确认清除
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 用户管理页面 -->
+    <div id="userManagePage" class="page-content hidden">
+        <div class="mb-8 flex items-center justify-between">
+            <div>
+                <h2 class="text-3xl font-bold text-gray-800 mb-2">用户管理</h2>
+                <p class="text-gray-600">添加、编辑、删除普通用户账户</p>
+            </div>
+            <button onclick="openUserModal()" class="btn-primary text-white px-6 py-3 rounded-lg font-medium transition-all shadow-lg">
+                <i class="fas fa-user-plus mr-2"></i>添加用户
+            </button>
+        </div>
+
+        <!-- 用户筛选 -->
+        <div class="mb-4 flex items-center space-x-4">
+            <input type="text" id="userSearchInput" placeholder="搜索用户名..." oninput="filterUsers()"
+                class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+            <select id="userRoleFilter" onchange="filterUsers()" class="px-4 py-2 border border-gray-300 rounded-lg">
+                <option value="">全部角色</option>
+                <option value="admin">管理员</option>
+                <option value="user">普通用户</option>
+                <option value="student">学生</option>
+            </select>
+            <button onclick="loadUsers()" class="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors" title="刷新">
+                <i class="fas fa-sync-alt"></i>
+            </button>
+        </div>
+
+        <!-- 用户列表 -->
+        <div class="glass-card rounded-xl shadow-md overflow-hidden">
+            <div class="overflow-auto max-h-[600px]">
+                <table class="w-full">
+                    <thead class="bg-gray-50 sticky top-0">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">用户名</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">角色</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">主目录</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">配额</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">状态</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">创建时间</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usersTableBody" class="divide-y divide-gray-200">
+                        <tr><td colspan="7" class="px-4 py-8 text-center text-gray-500"><i class="fas fa-spinner fa-spin mr-2"></i>加载中...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</main>
+</div>
+
+<!-- Add / Edit User Modal -->
+<div id="addUserModal" class="fixed inset-0 modal-overlay hidden items-center justify-center z-50">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4">
+        <div class="p-6 border-b border-gray-200 flex items-center justify-between">
+            <h3 id="userModalTitle" class="text-xl font-bold text-gray-800">添加新用户</h3>
+            <button onclick="closeUserModal()" class="text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <form id="userForm" class="p-6 space-y-4">
+            <input type="hidden" id="editUserId" value="">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">用户名</label>
+                <input type="text" id="newUsername" required placeholder="输入用户名"
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2" id="passwordLabel">密码 <span class="text-xs text-gray-400">（留空=不修改）</span></label>
+                <input type="password" id="newPassword" placeholder="输入密码（留空则不修改）"
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">主目录</label>
+                <input type="text" id="newHomeDir" value="./ftp_root/" required
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">权限</label>
+                <select id="newPermissions" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <option value="elr">只读 (elr)</option>
+                    <option value="elradfmw">完全访问 (elradfmw)</option>
+                    <option value="elradfmwMT">完全访问 + 目录操作 (elradfmwMT)</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">存储配额 (MB, 0=无限制)</label>
+                <input type="number" id="newQuota" value="0" min="0"
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">速度限制 (KB/s, 0=无限制)</label>
+                <input type="number" id="newSpeedLimit" value="0" min="0"
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+            </div>
+        </form>
+        <div class="p-6 border-t border-gray-200 flex justify-end space-x-3">
+            <button onclick="closeUserModal()" class="px-6 py-2 text-gray-600 hover:text-gray-800 transition-all">取消</button>
+            <button onclick="submitUser()" class="btn-primary text-white px-6 py-2 rounded-lg transition-all">保存</button>
+        </div>
+    </div>
+</div>
+
+<!-- Confirm Delete User Modal -->
+<div id="deleteUserModal" class="fixed inset-0 modal-overlay hidden items-center justify-center z-50">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4">
+        <div class="p-6 border-b border-gray-200">
+            <h3 class="text-xl font-bold text-gray-800">
+                <i class="fas fa-exclamation-triangle text-red-500 mr-2"></i>确认删除用户
+            </h3>
+        </div>
+        <div class="p-6">
+            <p class="text-gray-700">确定要删除用户 <strong id="deleteUsername"></strong> 吗？此操作不可恢复。</p>
+        </div>
+        <div class="p-6 border-t border-gray-200 flex justify-end space-x-3">
+            <button onclick="closeDeleteUserModal()" class="px-6 py-2 text-gray-600 hover:text-gray-800 transition-all">取消</button>
+            <button onclick="confirmDeleteUser()" id="btnConfirmDeleteUser" class="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg transition-all">
+                <i class="fas fa-trash mr-2"></i>删除
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Notification -->
+<div id="toast" class="fixed top-4 right-4 transform translate-x-full transition-all duration-300 z-50">
+        <div class="bg-white rounded-lg shadow-lg p-4 flex items-center space-x-3">
+            <i id="toastIcon" class="fas fa-check-circle text-green-500 text-xl"></i>
+            <span id="toastMessage" class="text-gray-800 font-medium">操作成功</span>
+        </div>
+    </div>
+
+    <script>
+        // 全局状态
+        let currentExamId = null;
+        let generatedStudents = [];
+        let cleanupTargetExamId = null;
+
+        console.log('📝 考试管理页面开始加载...');
+
+        // 统一认证 fetch：自动带上 admin 作用域
+        function examAdminFetch(url, options = {}) {
+            return fetch(url, {
+                ...options,
+                headers: {
+                    ...options.headers,
+                    'X-Auth-Scope': 'admin'
+                }
+            });
+        }
+
+        // ==================== 认证检查 ====================
+
+        async function checkAuth() {
+            console.log('🔐 开始认证检查...');
+            try {
+                const response = await examAdminFetch('/api/auth/me');
+                console.log('认证响应状态:', response.status);
+
+                if (!response.ok) {
+                    console.warn('未登录，跳转到登录页');
+                    updateAuthDebugBadge('-');
+                    window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+
+                const data = await response.json();
+                console.log('当前用户:', data);
+                updateAuthDebugBadge(data.username);
+                document.getElementById('currentUsername').textContent = data.username;
+
+                if (data.role !== 'admin') {
+                    console.warn('非管理员用户，重定向到文件浏览器');
+                    window.location.href = '/explorer';
+                    return;
+                }
+
+                console.log('✅ 认证通过，页面继续加载');
+            } catch (error) {
+                console.error('认证检查失败:', error);
+                window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname);
+            }
+        }
+
+        async function logout() {
+            try {
+                await examAdminFetch('/api/auth/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+            } catch (error) {}
+            window.location.href = '/login';
+        }
+
+        // ==================== 页面导航 ====================
+
+        document.querySelectorAll('.sidebar-item[data-page]').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                const page = item.dataset.page;
+                
+                document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+                item.classList.add('active');
+                
+                document.querySelectorAll('.page-content').forEach(p => p.classList.add('hidden'));
+                document.getElementById(page + 'Page').classList.remove('hidden');
+                
+                if (page === 'exam-history') {
+                    loadExamHistory();
+                }
+                if (page === 'user-manage') {
+                    loadUsers();
+                }
+            });
+        });
+
+        // ==================== 文件处理 ====================
+
+        function handleFileSelect(input) {
+            const file = input.files[0];
+            if (file) {
+                document.getElementById('fileName').textContent = file.name + ' (' + formatFileSize(file.size) + ')';
+                document.getElementById('fileInfo').classList.remove('hidden');
+            } else {
+                document.getElementById('fileInfo').classList.add('hidden');
+            }
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        // ==================== 生成考生账号 ====================
+
+        async function createExam() {
+            const examId = document.getElementById('examId').value.trim();
+            const examName = document.getElementById('examName').value.trim() || examId;
+            const studentCount = parseInt(document.getElementById('studentCount').value);
+            const quotaPerStudent = parseInt(document.getElementById('quotaPerStudent').value) * 1024 * 1024;
+
+            if (!examId) {
+                showToast('请输入考试 ID', 'error');
+                return;
+            }
+
+            if (!studentCount || studentCount < 1 || studentCount > 500) {
+                showToast('考生数量必须在 1-500 之间', 'error');
+                return;
+            }
+
+            const btn = document.getElementById('btnCreateExam');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>创建中...';
+
+            try {
+                const response = await examAdminFetch('/api/exam/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        exam_id: examId,
+                        exam_name: examName,
+                        count: studentCount,
+                        quota_bytes: quotaPerStudent
+                    })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    generatedStudents = result.students || [];
+                    currentExamId = examId;
+                    
+                    renderStudentsTable(generatedStudents);
+                    document.getElementById('studentsResult').classList.remove('hidden');
+                    
+                    showToast(`成功创建考试 "${examName}"，生成 ${generatedStudents.length} 个 6 位数字考生账号`, 'success');
+                } else {
+                    showToast(result.error || '创建失败', 'error');
+                }
+            } catch (error) {
+                showToast('创建失败：' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-plus-circle mr-2"></i>创建考试';
+            }
+        }
+
+        function renderStudentsTable(students) {
+            const tbody = document.getElementById('studentsTableBody');
+            tbody.innerHTML = '';
+
+            students.forEach((stu, index) => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50 transition-colors';
+                row.innerHTML = `
+                    <td class="px-4 py-3 text-gray-600">${index + 1}</td>
+                    <td class="px-4 py-3">
+                        <code class="bg-blue-100 text-blue-700 px-3 py-1 rounded text-sm font-mono font-bold">${stu.username}</code>
+                    </td>
+                    <td class="px-4 py-3">
+                        <code class="bg-gray-100 px-2 py-1 rounded text-sm font-mono">${stu.password}</code>
+                    </td>
+                    <td class="px-4 py-3 text-gray-600">${stu.seat_number}</td>
+                    <td class="px-4 py-3">
+                        <span class="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">已创建</span>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function goToHistoryPage() {
+            document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+            document.querySelector('[data-page="exam-history"]').classList.add('active');
+            
+            document.querySelectorAll('.page-content').forEach(p => p.classList.add('hidden'));
+            document.getElementById('examHistoryPage').classList.remove('hidden');
+            
+            loadExamHistory();
+        }
+
+        function downloadStudentsCSV() {
+            if (!generatedStudents.length) return;
+
+            const csvContent = [
+                ['序号', '考生账号 (6 位数字)', '密码', '工位号', 'FTP 路径'],
+                ...generatedStudents.map((stu, i) => [
+                    i + 1,
+                    stu.username,
+                    stu.password,
+                    stu.seat_number,
+                    stu.home_dir
+                ])
+            ].map(row => row.join(',')).join('\n');
+
+            const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `${currentExamId}_students_${new Date().getTime()}.csv`;
+            link.click();
+            
+            showToast('CSV 导出成功', 'success');
+        }
+
+        // ==================== 分发试卷 ====================
+
+        async function distributeExam() {
+            if (!currentExamId) {
+                showToast('请先生成考生账号', 'error');
+                return;
+            }
+
+            const fileInput = document.getElementById('examFile');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                showToast('请选择试卷文件', 'error');
+                return;
+            }
+
+            const overwrite = document.getElementById('overwriteExisting').checked;
+            const btn = document.getElementById('btnDistribute');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>分发中...';
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('exam_id', currentExamId);
+            formData.append('overwrite', overwrite ? 'true' : 'false');
+
+            try {
+                const response = await examAdminFetch('/api/exam/distribute', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showToast(`试卷已成功分发到 ${result.distributed_count || 0} 个考生目录`, 'success');
+                } else {
+                    showToast(result.error || '分发失败', 'error');
+                }
+            } catch (error) {
+                showToast('分发失败：' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-share-square mr-2"></i>分发试卷';
+            }
+        }
+
+        // ==================== CSV 导出 ====================
+
+        function downloadCSV() {
+            if (!generatedStudents.length) return;
+
+            const csvContent = [
+                ['序号', '用户名', '密码', '专属路径', '考试 ID'],
+                ...generatedStudents.map((stu, i) => [
+                    i + 1,
+                    stu.username,
+                    stu.password,
+                    stu.home_dir,
+                    currentExamId
+                ])
+            ].map(row => row.join(',')).join('\n');
+
+            const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `${currentExamId}_students_${new Date().getTime()}.csv`;
+            link.click();
+        }
+
+        function copyAllPasswords() {
+            if (!generatedStudents.length) return;
+
+            const text = generatedStudents.map((stu, i) => 
+                `${i + 1}. ${stu.username} : ${stu.password}`
+            ).join('\n');
+
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('已复制所有账号密码到剪贴板', 'success');
+            }).catch(() => {
+                showToast('复制失败，请手动选择复制', 'error');
+            });
+        }
+
+        // ==================== 考试历史加载 ====================
+
+        let currentManageExamId = null;
+        let selectedPaperFiles = [];
+
+        async function loadExamHistory() {
+            const tbody = document.getElementById('examHistoryBody');
+            tbody.innerHTML = '<tr><td colspan="3" class="px-4 py-8 text-center text-gray-500"><i class="fas fa-spinner fa-spin mr-2"></i>加载中...</td></tr>';
+
+            try {
+                const response = await examAdminFetch('/api/exam/list');
+                if (!response.ok) throw new Error('获取考试列表失败');
+                const data = await response.json();
+
+                if (data.exams && data.exams.length > 0) {
+                    renderExamHistory(data.exams);
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="3" class="px-4 py-8 text-center text-gray-500">暂无考试记录</td></tr>';
+                }
+            } catch (error) {
+                tbody.innerHTML = '<tr><td colspan="3" class="px-4 py-8 text-center text-red-500">加载失败：' + error.message + '</td></tr>';
+            }
+        }
+
+        function renderExamHistory(exams) {
+            const tbody = document.getElementById('examHistoryBody');
+            tbody.innerHTML = '';
+
+            exams.forEach(exam => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50 transition-colors';
+
+                row.innerHTML = `
+                    <td class="px-4 py-3 font-medium text-gray-800">${exam.exam_id}</td>
+                    <td class="px-4 py-3 text-gray-600">${exam.student_count} 人</td>
+                    <td class="px-4 py-3">
+                        <div class="flex items-center space-x-2">
+                            <button onclick="openPaperPool('${exam.exam_id}')" 
+                                class="text-blue-600 hover:text-blue-700 font-medium text-sm" title="管理试卷池">
+                                <i class="fas fa-folder-open"></i>
+                            </button>
+                            <button onclick="openStudentsManage('${exam.exam_id}')" 
+                                class="text-green-600 hover:text-green-700 font-medium text-sm" title="管理考生">
+                                <i class="fas fa-users"></i>
+                            </button>
+                            <button onclick="showCleanupModal('${exam.exam_id}')" 
+                                class="text-red-600 hover:text-red-700 font-medium text-sm" title="清除考试">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        async function openStudentsManage(examId) {
+            currentManageExamId = examId;
+            document.getElementById('studentsExamIdDisplay').textContent = examId;
+            document.getElementById('studentsManagePanel').classList.remove('hidden');
+            
+            await loadStudentsForManage(examId);
+        }
+
+        function closeStudentsManage() {
+            document.getElementById('studentsManagePanel').classList.add('hidden');
+            currentManageExamId = null;
+        }
+
+        async function loadStudentsForManage(examId) {
+            const tbody = document.getElementById('studentsManageTableBody');
+            tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-gray-500"><i class="fas fa-spinner fa-spin mr-2"></i>加载中...</td></tr>';
+
+            try {
+                const response = await examAdminFetch(`/api/exam/students/${examId}`);
+                if (!response.ok) throw new Error('获取考生列表失败');
+                const data = await response.json();
+
+                if (data.students && data.students.length > 0) {
+                    renderStudentsManageTable(data.students);
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">暂无考生</td></tr>';
+                }
+            } catch (error) {
+                tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-red-500">加载失败</td></tr>';
+            }
+        }
+
+        function renderStudentsManageTable(students) {
+            const tbody = document.getElementById('studentsManageTableBody');
+            tbody.innerHTML = '';
+
+            students.forEach((stu, index) => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50 transition-colors';
+                
+                const paperStatus = stu.distributed_paper ? 
+                    `<span class="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium" title="${stu.distributed_paper}">已分卷</span>` :
+                    `<span class="px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs font-medium">未分卷</span>`;
+
+                row.innerHTML = `
+                    <td class="px-4 py-3 text-gray-600">${index + 1}</td>
+                    <td class="px-4 py-3">
+                        <code class="bg-blue-100 text-blue-700 px-3 py-1 rounded text-sm font-mono font-bold">${stu.username}</code>
+                    </td>
+                    <td class="px-4 py-3">
+                        <code class="bg-gray-100 px-2 py-1 rounded text-sm font-mono">${stu.password}</code>
+                    </td>
+                    <td class="px-4 py-3 text-gray-600">${stu.seat_number || '-'}</td>
+                    <td class="px-4 py-3">${paperStatus}</td>
+                    <td class="px-4 py-3">
+                        <button onclick="deleteStudent(${stu.exam_student_id}, '${stu.username}')" 
+                            class="text-red-600 hover:text-red-700 p-2 rounded hover:bg-red-50 transition-colors"
+                            title="删除此考生">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        async function viewStudents(examId) {
+            // 切换到创建页面显示学生列表
+            document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+            document.querySelector('[data-page="exam-create"]').classList.add('active');
+            
+            document.querySelectorAll('.page-content').forEach(p => p.classList.add('hidden'));
+            document.getElementById('examCreatePage').classList.remove('hidden');
+            
+            // 填充考试 ID 并加载学生
+            document.getElementById('examId').value = examId;
+            currentExamId = examId;
+            
+            // 加载该考试的学生列表
+            await loadStudentsForExam(examId);
+        }
+
+        async function loadStudentsForExam(examId) {
+            const resultDiv = document.getElementById('studentsResult');
+            const tbody = document.getElementById('studentsTableBody');
+            
+            tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-500"><i class="fas fa-spinner fa-spin mr-2"></i>加载中...</td></tr>';
+            resultDiv.classList.remove('hidden');
+
+            try {
+                const response = await examAdminFetch(`/api/exam/students/${examId}`);
+                if (!response.ok) throw new Error('获取考生列表失败');
+                const data = await response.json();
+
+                if (data.students && data.students.length > 0) {
+                    renderStudentsTableWithActions(data.students);
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-500">暂无考生</td></tr>';
+                }
+            } catch (error) {
+                tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-red-500">加载失败</td></tr>';
+            }
+        }
+
+        function renderStudentsTableWithActions(students) {
+            const tbody = document.getElementById('studentsTableBody');
+            tbody.innerHTML = '';
+
+            students.forEach((stu, index) => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50 transition-colors';
+                
+                const paperStatus = stu.distributed_paper ? 
+                    `<span class="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">已分卷：${stu.distributed_paper}</span>` :
+                    `<span class="px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs font-medium">未分卷</span>`;
+
+                row.innerHTML = `
+                    <td class="px-4 py-3 text-gray-600">${index + 1}</td>
+                    <td class="px-4 py-3">
+                        <code class="bg-blue-100 text-blue-700 px-3 py-1 rounded text-sm font-mono font-bold">${stu.username}</code>
+                    </td>
+                    <td class="px-4 py-3">
+                        <code class="bg-gray-100 px-2 py-1 rounded text-sm font-mono">${stu.password}</code>
+                    </td>
+                    <td class="px-4 py-3 text-gray-600">${stu.seat_number}</td>
+                    <td class="px-4 py-3">
+                        <div class="flex items-center space-x-2">
+                            ${paperStatus}
+                            <button onclick="deleteStudent(${stu.exam_student_id}, '${stu.username}')" 
+                                class="text-red-600 hover:text-red-700 p-1 rounded hover:bg-red-50 transition-colors"
+                                title="删除此考生">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        async function deleteStudent(studentId, username) {
+            if (!confirm(`确定要删除考生 "${username}" 吗？\n\n此操作将：\n- 删除考生账号\n- 删除考生专属目录及所有文件\n\n此操作不可恢复！`)) return;
+
+            try {
+                const response = await examAdminFetch(`/api/exam/student/${studentId}`, {
+                    method: 'DELETE',
+                    headers: { 'X-Auth-Scope': 'admin' }
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showToast(`考生 "${username}" 已删除`, 'success');
+                    // 重新加载学生列表
+                    loadStudentsForExam(currentExamId);
+                } else {
+                    showToast(result.error || '删除失败', 'error');
+                }
+            } catch (error) {
+                showToast('删除失败：' + error.message, 'error');
+            }
+        }
+
+        async function exportStudentsCSV() {
+            if (!currentManageExamId) {
+                showToast('请先选择考试', 'error');
+                return;
+            }
+
+            try {
+                const response = await examAdminFetch(`/api/exam/students/${encodeURIComponent(currentManageExamId)}/export`, { credentials: 'include' });
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    const contentDisposition = response.headers.get('Content-Disposition');
+                    const filename = contentDisposition 
+                        ? contentDisposition.match(/filename="?(.+)"?/)?.[1] 
+                        : `${currentManageExamId}_students_${new Date().getTime()}.csv`;
+                    link.download = filename;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                    
+                    showToast('考生信息导出成功', 'success');
+                } else {
+                    const text = await response.text();
+                    let errorMsg = '导出失败';
+                    try {
+                        const data = JSON.parse(text);
+                        errorMsg = data.error || errorMsg;
+                    } catch (e) {
+                        errorMsg = text || errorMsg;
+                    }
+                    showToast(errorMsg, 'error');
+                }
+            } catch (error) {
+                showToast('导出失败：' + error.message, 'error');
+            }
+        }
+
+        async function clearAllStudents(examId) {
+            if (!examId) return;
+
+            if (!confirm(`⚠️ 警告：确定要清空考试 "${examId}" 的所有考生吗？\n\n此操作将：\n- 删除所有考生账号\n- 删除所有考生专属目录及文件\n\n此操作不可恢复！`)) return;
+
+            try {
+                const response = await examAdminFetch(`/api/exam/students/${examId}`, {
+                    method: 'DELETE',
+                    headers: { 'X-Auth-Scope': 'admin' }
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showToast(`已删除 ${result.deleted_count} 名考生`, 'success');
+                    if (currentManageExamId === examId) {
+                        closePaperPool();
+                    }
+                    loadExamHistory();
+                } else {
+                    showToast(result.error || '清空失败', 'error');
+                }
+            } catch (error) {
+                showToast('清空失败：' + error.message, 'error');
+            }
+        }
+
+        // ==================== 试卷池管理 ====================
+
+        function openPaperPool(examId) {
+            currentManageExamId = examId;
+            document.getElementById('currentExamIdDisplay').textContent = examId;
+            document.getElementById('noExamSelected').classList.add('hidden');
+            document.getElementById('paperPoolPanel').classList.remove('hidden');
+            
+            loadExamPapers(examId);
+        }
+
+        function closePaperPool() {
+            currentManageExamId = null;
+            document.getElementById('paperPoolPanel').classList.add('hidden');
+            document.getElementById('noExamSelected').classList.remove('hidden');
+            document.getElementById('selectedFilesInfo').classList.add('hidden');
+            document.getElementById('paperFiles').value = '';
+            selectedPaperFiles = [];
+            document.getElementById('btnUploadPapers').disabled = true;
+            document.getElementById('btnDistributePapers').disabled = true;
+        }
+
+        function handlePaperFileSelect(input) {
+            const files = Array.from(input.files);
+            if (files.length === 0) {
+                document.getElementById('selectedFilesInfo').classList.add('hidden');
+                document.getElementById('btnUploadPapers').disabled = true;
+                return;
+            }
+
+            selectedPaperFiles = files;
+            
+            const infoDiv = document.getElementById('selectedFilesInfo');
+            infoDiv.innerHTML = `
+                <div class="inline-flex flex-wrap gap-2">
+                    ${files.map(f => `
+                        <span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs">
+                            <i class="fas fa-file mr-1"></i>${f.name} (${formatFileSize(f.size)})
+                        </span>
+                    `).join('')}
+                </div>
+                <p class="text-xs text-gray-500 mt-2">共 ${files.length} 个文件</p>
+            `;
+            infoDiv.classList.remove('hidden');
+            document.getElementById('btnUploadPapers').disabled = false;
+        }
+
+        async function uploadPapers() {
+            if (!currentManageExamId || selectedPaperFiles.length === 0) return;
+
+            const btn = document.getElementById('btnUploadPapers');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>上传中...';
+
+            const formData = new FormData();
+            formData.append('exam_id', currentManageExamId);
+            selectedPaperFiles.forEach(file => {
+                formData.append('files', file);
+            });
+
+            try {
+                const response = await examAdminFetch('/api/exam/upload_papers', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showToast(`成功上传 ${result.count} 份试卷`, 'success');
+                    document.getElementById('paperFiles').value = '';
+                    document.getElementById('selectedFilesInfo').classList.add('hidden');
+                    selectedPaperFiles = [];
+                    document.getElementById('btnUploadPapers').disabled = true;
+                    loadExamPapers(currentManageExamId);
+                } else {
+                    showToast(result.error || '上传失败', 'error');
+                }
+            } catch (error) {
+                showToast('上传失败：' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-upload mr-2"></i>上传到试卷池';
+            }
+        }
+
+        async function loadExamPapers(examId) {
+            const container = document.getElementById('papersListContainer');
+            container.innerHTML = '<div class="text-center text-gray-500 py-8"><i class="fas fa-spinner fa-spin mr-2"></i>加载中...</div>';
+
+            try {
+                const response = await examAdminFetch(`/api/exam/papers/${examId}`);
+                if (!response.ok) throw new Error('获取试卷列表失败');
+                const data = await response.json();
+
+                if (data.papers && data.papers.length > 0) {
+                    renderPapersList(data.papers);
+                    document.getElementById('btnClearAll').disabled = false;
+                    document.getElementById('btnDistributePapers').disabled = false;
+                } else {
+                    container.innerHTML = '<div class="text-center text-gray-500 py-8">暂无试卷</div>';
+                    document.getElementById('btnClearAll').disabled = true;
+                }
+            } catch (error) {
+                container.innerHTML = '<div class="text-center text-red-500 py-8">加载失败</div>';
+                document.getElementById('btnClearAll').disabled = true;
+            }
+        }
+
+        function renderPapersList(papers) {
+            const container = document.getElementById('papersListContainer');
+            container.innerHTML = '';
+
+            papers.forEach(paper => {
+                const item = document.createElement('div');
+                item.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors';
+                
+                const fileIcon = getFileIcon(paper.filename);
+                const createdAt = paper.created_at ? new Date(paper.created_at).toLocaleString('zh-CN') : '未知';
+
+                item.innerHTML = `
+                    <div class="flex items-center space-x-3 flex-1">
+                        <i class="${fileIcon} text-2xl text-blue-500"></i>
+                        <div class="flex-1 min-w-0">
+                            <p class="font-medium text-gray-800 truncate">${paper.filename}</p>
+                            <p class="text-xs text-gray-500">上传时间：${createdAt}</p>
+                        </div>
+                    </div>
+                    <button onclick="deletePaper(${paper.id}, '${paper.filename.replace(/'/g, "\\'")}')" 
+                        class="text-red-600 hover:text-red-700 p-2 rounded hover:bg-red-50 transition-colors"
+                        title="删除此试卷">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function getFileIcon(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            const icons = {
+                'pdf': 'fas fa-file-pdf text-red-500',
+                'doc': 'fas fa-file-word text-blue-500',
+                'docx': 'fas fa-file-word text-blue-500',
+                'txt': 'fas fa-file-alt text-gray-500',
+                'zip': 'fas fa-file-archive text-yellow-500',
+                'rar': 'fas fa-file-archive text-yellow-500'
+            };
+            return icons[ext] || 'fas fa-file text-gray-400';
+        }
+
+        async function deletePaper(paperId, filename) {
+            if (!confirm(`确定要删除试卷 "${filename}" 吗？此操作不可恢复。`)) return;
+
+            try {
+                const response = await examAdminFetch(`/api/exam/paper/${paperId}`, {
+                    method: 'DELETE',
+                    headers: { 'X-Auth-Scope': 'admin' }
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showToast(`试卷 "${filename}" 已删除`, 'success');
+                    loadExamPapers(currentManageExamId);
+                } else {
+                    showToast(result.error || '删除失败', 'error');
+                }
+            } catch (error) {
+                showToast('删除失败：' + error.message, 'error');
+            }
+        }
+
+        async function clearAllPapers() {
+            if (!currentManageExamId) return;
+
+            if (!confirm(`确定要清空考试 "${currentManageExamId}" 的所有试卷吗？此操作不可恢复。\n\n注意：如果试卷已分发给考生，将无法删除，需先清理考生数据。`)) return;
+
+            const btn = document.getElementById('btnClearAll');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>清空中...';
+
+            try {
+                const response = await examAdminFetch(`/api/exam/papers/${currentManageExamId}`, {
+                    method: 'DELETE',
+                    headers: { 'X-Auth-Scope': 'admin' }
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showToast(`已删除 ${result.deleted_count} 份试卷`, 'success');
+                    loadExamPapers(currentManageExamId);
+                } else {
+                    showToast(result.error || '清空失败', 'error');
+                }
+            } catch (error) {
+                showToast('清空失败：' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-trash-alt mr-2"></i>清空全部';
+            }
+        }
+
+        // ==================== 分发试卷 ====================
+
+        async function distributePapers() {
+            if (!currentManageExamId) {
+                showToast('请先选择一个考试', 'error');
+                return;
+            }
+
+            const btn = document.getElementById('btnDistributePapers');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>分发中...';
+
+            try {
+                const response = await examAdminFetch('/api/exam/distribute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ exam_id: currentManageExamId })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showToast(`分卷成功：${result.distributed_count} 人已分发，${result.failed_count} 人失败`, result.failed_count > 0 ? 'info' : 'success');
+                    // 刷新考生列表
+                    loadStudentsForManage(currentManageExamId);
+                } else {
+                    showToast(result.error || '分发失败', 'error');
+                }
+            } catch (error) {
+                showToast('分发失败：' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-share-square mr-2"></i>随机分卷';
+            }
+        }
+
+        // ==================== 清除模态框 ====================
+
+        function showCleanupModal(examId) {
+            cleanupTargetExamId = examId;
+            document.getElementById('cleanupExamId').textContent = examId;
+            document.getElementById('confirmCleanup').checked = false;
+            document.getElementById('btnConfirmCleanup').disabled = true;
+            
+            document.getElementById('cleanupModal').classList.remove('hidden');
+            document.getElementById('cleanupModal').classList.add('flex');
+        }
+
+        function closeCleanupModal() {
+            document.getElementById('cleanupModal').classList.add('hidden');
+            document.getElementById('cleanupModal').classList.remove('flex');
+            cleanupTargetExamId = null;
+        }
+
+        document.getElementById('confirmCleanup').addEventListener('change', (e) => {
+            document.getElementById('btnConfirmCleanup').disabled = !e.target.checked;
+        });
+
+        async function confirmCleanup() {
+            if (!cleanupTargetExamId) return;
+
+            const btn = document.getElementById('btnConfirmCleanup');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>清除中...';
+
+            try {
+                const response = await examAdminFetch('/api/exam/cleanup', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ exam_id: cleanupTargetExamId, keep_papers: false })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showToast(`考试 "${cleanupTargetExamId}" 及其考试ID已清除`, 'success');
+                    closeCleanupModal();
+                    
+                    // 关闭已打开的管理面板（如果清场的考试正在被管理）
+                    if (currentManageExamId === cleanupTargetExamId) {
+                        closeStudentsManage();
+                        closePaperPool();
+                    }
+                    
+                    // 刷新考试历史列表
+                    loadExamHistory();
+                } else {
+                    showToast(result.error || '清除失败', 'error');
+                }
+            } catch (error) {
+                showToast('清除失败：' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-trash mr-2"></i>确认清除';
+            }
+        }
+
+        // ==================== 用户管理 ====================
+
+        let usersCache = [];
+        let deleteTargetUserId = null;
+
+        function openUserModal(userId) {
+            if (userId) {
+                // 编辑模式
+                const user = usersCache.find(u => u.id === userId);
+                if (!user) return;
+                document.getElementById('userModalTitle').textContent = '编辑用户';
+                document.getElementById('editUserId').value = userId;
+                document.getElementById('newUsername').value = user.username;
+                document.getElementById('newUsername').readOnly = true;
+                document.getElementById('newUsername').classList.add('bg-gray-100', 'cursor-not-allowed');
+                document.getElementById('newPassword').value = '';
+                document.getElementById('newPassword').required = false;
+                document.getElementById('newPassword').placeholder = '输入新密码（留空不修改）';
+                document.getElementById('passwordLabel').innerHTML = '密码 <span class="text-xs text-gray-400">（留空=不修改）</span>';
+                document.getElementById('newHomeDir').value = user.home_dir || './ftp_root/';
+                document.getElementById('newPermissions').value = user.perms || 'elr';
+                document.getElementById('newQuota').value = user.quota_bytes ? Math.round(user.quota_bytes / (1024 * 1024)) : 0;
+                document.getElementById('newSpeedLimit').value = user.max_speed_kbps || 0;
+            } else {
+                // 添加模式
+                document.getElementById('userModalTitle').textContent = '添加新用户';
+                document.getElementById('editUserId').value = '';
+                document.getElementById('newUsername').value = '';
+                document.getElementById('newUsername').readOnly = false;
+                document.getElementById('newUsername').classList.remove('bg-gray-100', 'cursor-not-allowed');
+                document.getElementById('newPassword').value = '';
+                document.getElementById('newPassword').required = true;
+                document.getElementById('newPassword').placeholder = '';
+                document.getElementById('passwordLabel').innerHTML = '密码';
+                document.getElementById('newHomeDir').value = './ftp_root/';
+                document.getElementById('newPermissions').value = 'elr';
+                document.getElementById('newQuota').value = 0;
+                document.getElementById('newSpeedLimit').value = 0;
+            }
+            document.getElementById('userForm').reset();
+            document.getElementById('addUserModal').classList.remove('hidden');
+            document.getElementById('addUserModal').classList.add('flex');
+        }
+
+        function closeUserModal() {
+            document.getElementById('addUserModal').classList.add('hidden');
+            document.getElementById('addUserModal').classList.remove('flex');
+            document.getElementById('userForm').reset();
+        }
+
+        async function submitUser() {
+            const editUserId = document.getElementById('editUserId').value;
+            const username = document.getElementById('newUsername').value.trim();
+            const password = document.getElementById('newPassword').value;
+            const homeDir = document.getElementById('newHomeDir').value.trim();
+            const perms = document.getElementById('newPermissions').value;
+            const quotaMB = parseInt(document.getElementById('newQuota').value) || 0;
+            const speedKbps = parseInt(document.getElementById('newSpeedLimit').value) || 0;
+
+            if (!username) { showToast('请输入用户名', 'error'); return; }
+            if (!homeDir) { showToast('请输入主目录', 'error'); return; }
+            if (!editUserId && !password) { showToast('请输入密码', 'error'); return; }
+
+            const userData = {
+                username: username,
+                home_dir: homeDir,
+                permissions: perms,
+                quota_bytes: quotaMB * 1024 * 1024,
+                speed_limit_kbps: speedKbps
+            };
+            if (password) {
+                userData.password = password;
+            }
+
+            try {
+                let response;
+                if (editUserId) {
+                    // 编辑（PUT）
+                    response = await examAdminFetch(`/api/admin/users/${editUserId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json', 'X-Auth-Scope': 'admin' },
+                        body: JSON.stringify(userData)
+                    });
+                } else {
+                    // 添加（POST）
+                    response = await examAdminFetch('/api/admin/users', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(userData)
+                    });
+                }
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showToast(editUserId ? '用户更新成功' : '用户添加成功', 'success');
+                    closeUserModal();
+                    loadUsers();
+                } else {
+                    showToast(result.error || '操作失败', 'error');
+                }
+            } catch (error) {
+                showToast('操作失败：' + error.message, 'error');
+            }
+        }
+
+        function openDeleteUserModal(userId) {
+            const user = usersCache.find(u => u.id === userId);
+            if (!user) return;
+            deleteTargetUserId = userId;
+            document.getElementById('deleteUsername').textContent = user.username;
+            document.getElementById('deleteUserModal').classList.remove('hidden');
+            document.getElementById('deleteUserModal').classList.add('flex');
+        }
+
+        function closeDeleteUserModal() {
+            document.getElementById('deleteUserModal').classList.add('hidden');
+            document.getElementById('deleteUserModal').classList.remove('flex');
+            deleteTargetUserId = null;
+        }
+
+        async function confirmDeleteUser() {
+            if (!deleteTargetUserId) return;
+            const btn = document.getElementById('btnConfirmDeleteUser');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>删除中...';
+
+            try {
+                const response = await examAdminFetch(`/api/admin/users/${deleteTargetUserId}`, {
+                    method: 'DELETE',
+                    headers: { 'X-Auth-Scope': 'admin' }
+                });
+                const result = await response.json();
+
+                if (response.ok) {
+                    showToast('用户已删除', 'success');
+                    closeDeleteUserModal();
+                    loadUsers();
+                } else {
+                    showToast(result.error || '删除失败', 'error');
+                }
+            } catch (error) {
+                showToast('删除失败：' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-trash mr-2"></i>删除';
+            }
+        }
+
+        async function loadUsers() {
+            const tbody = document.getElementById('usersTableBody');
+            tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500"><i class="fas fa-spinner fa-spin mr-2"></i>加载中...</td></tr>';
+
+            try {
+                const response = await examAdminFetch('/api/admin/users');
+                if (!response.ok) throw new Error('获取用户列表失败');
+                const data = await response.json();
+                usersCache = data.users || [];
+                renderUsersTable(usersCache);
+            } catch (error) {
+                tbody.innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-red-500">加载失败：${error.message}</td></tr>`;
+            }
+        }
+
+        function renderUsersTable(users) {
+            const tbody = document.getElementById('usersTableBody');
+            const search = document.getElementById('userSearchInput').value.toLowerCase();
+            const roleFilter = document.getElementById('userRoleFilter').value;
+
+            const filtered = users.filter(u => {
+                const matchSearch = !search || u.username.toLowerCase().includes(search);
+                const matchRole = !roleFilter || u.role === roleFilter;
+                return matchSearch && matchRole;
+            });
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">暂无用户</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = '';
+            filtered.forEach(user => {
+                const roleClass = {
+                    admin: 'bg-purple-100 text-purple-700',
+                    user: 'bg-blue-100 text-blue-700',
+                    student: 'bg-green-100 text-green-700'
+                }[user.role] || 'bg-gray-100 text-gray-700';
+
+                const roleText = {
+                    admin: '管理员',
+                    user: '普通用户',
+                    student: '学生'
+                }[user.role] || user.role;
+
+                const quotaText = user.quota_bytes ? `${(user.quota_bytes / (1024 * 1024)).toFixed(0)} MB` : '无限制';
+                const statusText = user.enabled ? '启用' : '禁用';
+                const statusClass = user.enabled ? 'text-green-600' : 'text-red-500';
+                const createdAt = user.created_at ? new Date(user.created_at).toLocaleString('zh-CN') : '-';
+
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50 transition-colors';
+                row.innerHTML = `
+                    <td class="px-4 py-3">
+                        <span class="font-medium text-gray-800">${user.username}</span>
+                    </td>
+                    <td class="px-4 py-3">
+                        <span class="px-2 py-1 rounded-full text-xs font-medium ${roleClass}">${roleText}</span>
+                    </td>
+                    <td class="px-4 py-3 text-sm text-gray-500 truncate max-w-[200px]" title="${user.home_dir || ''}">${user.home_dir || '-'}</td>
+                    <td class="px-4 py-3 text-sm text-gray-600">${quotaText}</td>
+                    <td class="px-4 py-3 text-sm ${statusClass} font-medium">${statusText}</td>
+                    <td class="px-4 py-3 text-sm text-gray-500">${createdAt}</td>
+                    <td class="px-4 py-3">
+                        <div class="flex items-center space-x-2">
+                            <button onclick="openUserModal(${user.id})" class="text-blue-600 hover:text-blue-700 p-2 rounded hover:bg-blue-50 transition-colors" title="编辑">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button onclick="openDeleteUserModal(${user.id})" class="text-red-600 hover:text-red-700 p-2 rounded hover:bg-red-50 transition-colors" title="删除">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function filterUsers() {
+            renderUsersTable(usersCache);
+        }
+
+        // ==================== Toast 通知 ====================
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toastMessage');
+            const toastIcon = document.getElementById('toastIcon');
+
+            const icons = {
+                success: 'fa-check-circle text-green-500',
+                error: 'fa-times-circle text-red-500',
+                info: 'fa-info-circle text-blue-500'
+            };
+
+            toastMessage.textContent = message;
+            toastIcon.className = `fas ${icons[type]} text-xl`;
+
+            toast.classList.remove('translate-x-full');
+
+            setTimeout(() => {
+                toast.classList.add('translate-x-full');
+            }, 3000);
+        }
+
+        // ==================== 页面导航（修复白屏问题）====================
+
+        function setupNavigation() {
+            console.log('设置页面导航...');
+            const navItems = document.querySelectorAll('.sidebar-item[data-page]');
+            console.log('找到导航项数量:', navItems.length);
+            
+            navItems.forEach(item => {
+                item.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const page = item.dataset.page;
+                    console.log('导航到页面:', page);
+                    
+                    document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+                    item.classList.add('active');
+                    
+                    document.querySelectorAll('.page-content').forEach(p => p.classList.add('hidden'));
+                    const targetPage = document.getElementById(page + 'Page');
+                    if (targetPage) {
+                        targetPage.classList.remove('hidden');
+                        console.log('显示页面:', page);
+                    } else {
+                        console.error('找不到页面元素:', page + 'Page');
+                    }
+                    
+                    if (page === 'exam-history') {
+                        loadExamHistory();
+                    }
+                });
+            });
+        }
+
+        // ==================== 初始化 ====================
+
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('✅ DOM 加载完成');
+            
+            // 确保页面内容可见
+            const createPage = document.getElementById('examCreatePage');
+            const historyPage = document.getElementById('examHistoryPage');
+            
+            if (createPage) {
+                createPage.classList.remove('hidden');
+                console.log('显示创建考试页面');
+            } else {
+                console.error('找不到 examCreatePage 元素');
+            }
+            
+            if (historyPage) {
+                historyPage.classList.add('hidden');
+            }
+
+            const userManagePage = document.getElementById('userManagePage');
+            if (userManagePage) {
+                userManagePage.classList.add('hidden');
+            }
+            
+            // 执行认证检查
+            checkAuth();
+            
+            // 设置导航
+            setupNavigation();
+
+            console.log('✅ 考试管理页面初始化完成');
+        });
+
+        // ==================== Auth Debug Badge ====================
+        function updateAuthDebugBadge(username) {
+            const badge = document.getElementById('authDebugBadge');
+            if (!badge) return;
+            badge.textContent = `scope: exam_admin | user: ${username || '-'}`;
+        }
+    </script>
+
+    <!-- Auth Debug Badge -->
+    <div id="authDebugBadge" class="fixed bottom-4 right-4 bg-gray-900 text-white text-xs px-3 py-2 rounded-lg shadow-lg z-50 opacity-90">
+        scope: exam_admin | user: -
+    </div>
+</body>
+</html>
